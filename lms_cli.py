@@ -506,9 +506,27 @@ class LMStudioClient:
                     if line == "data: [DONE]": break
                     if ttft == 0: ttft = time.time() - start_time
                     token_count += 1
+            
             total_time = time.time() - start_time
             tps = token_count / (total_time - ttft) if (total_time - ttft) > 0 else 0
-            print(f"\nResults: TTFT: {ttft:.4f}s | TPS: {tps:.2f} | Tokens: {token_count} | Total: {total_time:.4f}s")
+            
+            # GPU Detection Heuristic
+            status = "❌ CPU (No Acceleration)"
+            if tps > 15:
+                status = "✅ GPU (Full Acceleration)"
+            elif tps > 5:
+                status = "🟡 Hybrid (Partial Offload)"
+            
+            print(f"\nResults for {model_id}:")
+            print(f"  Speed:  {tps:.2f} tokens/sec")
+            print(f"  TTFT:   {ttft:.4f}s")
+            print(f"  Tokens: {token_count}")
+            print(f"  Status: {status}")
+            
+            if "CPU" in status:
+                print("\n  Hint: If this should be on GPU, try reloading with:")
+                print(f"  ./lms_cli.py load {model_id} --gpu 1.0")
+                
         except Exception as e:
             print(f"Benchmark failed: {e}")
 
