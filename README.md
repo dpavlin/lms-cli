@@ -1,96 +1,87 @@
 # LM Studio CLI Utility
 
-A professional Python-based CLI utility for interacting with [LM Studio](https://lmstudio.ai/). This tool provides a powerful interface for model management, streaming interactions, performance benchmarking, and hardware-aware model discovery.
+A high-performance Python CLI for [LM Studio](https://lmstudio.ai/). Designed for developers who need fast model management, real-time monitoring, and hardware-aware model discovery.
 
-## Features
+## ✨ Key Smart Features
 
-- **Advanced Model Management**:
-    - List, search, load, and unload models.
-    - **`unload --all`**: Instantly clear all models from VRAM.
-    - **`download`**: Auto-converts Hugging Face repo IDs to full URLs.
-    - **`download-status`**: Track background download progress.
-- **Hardware-Aware Search**:
-    - **VRAM Estimation**: Automatically estimates if a model will fit on your GPU based on your configured VRAM capacity.
-    - **Hugging Face Discovery**: Search the HF Hub for new GGUF models directly from your terminal.
-- **High-Performance Interactions**:
-    - **`chat --stream`**: Real-time token streaming for chat.
-    - **`repl`**: Interactive, stateful, streaming conversation mode.
-    - **`bench`**: Measure **Time to First Token (TTFT)** and **Tokens Per Second (TPS)**.
-- **Dynamic Configuration**:
-    - Set `base_url`, `timeout`, and `vram_gb` (for fit estimations).
-    - Configure `context_length` and `gpu_layers` per model load.
-- **Integrations & Utilities**:
-    - **OpenCode**: Automatically generate `opencode.json` with auto-detected Planner (thinking) and Coder models.
-    - **Presets**: List local LM Studio configuration presets.
-    - **Templates**: Quick access to optimized system prompts.
+- **Interactive Switcher**: Use `./lms_cli.py switch` to browse your models, see their VRAM footprint, and load them interactively with automatic memory management.
+- **Real-time Dashboard**: Use `./lms_cli.py top` for a `top`-like view of your LM Studio server, including loaded models and background download progress bars.
+- **Context-Aware Commands**: Most commands (like `chat`, `repl`, `bench`) **automatically use the currently active model** if you don't specify one.
+- **Hardware Estimation**: The `search` and `list` commands estimate VRAM usage and show a 🟢/🟡/🔴 indicator based on your GPU's capacity.
+- **Intelligent Discovery**: Search the Hugging Face Hub for GGUF models directly from your terminal with tool-support (🛠️) detection.
 
-## Installation
+## 🛠️ Installation
 
-1. Ensure you have Python 3 installed.
-2. Clone this repository or copy `lms_cli.py` to your local machine.
-3. Make the script executable:
+1. Ensure Python 3 is installed.
+2. Make the script executable:
    ```bash
    chmod +x lms_cli.py
    ```
 
-## Usage
+## 🚀 Quick Start
 
-### Configuration
-Set up your environment and hardware limits.
+### 1. Configuration
+Set your hardware limits to enable "Smart Fit" estimation.
 ```bash
-# Set your GPU's VRAM capacity (used for fit estimation in 'search')
-./lms_cli.py config --vram 12.0
-
-# Show current config
-./lms_cli.py config --show
+# Tell the CLI your GPU has 12GB VRAM
+./lms_cli.py config --vram 12.0 --context 32768
 ```
 
-### Model Discovery & Download
-Find models that fit your hardware and download them.
+### 2. Model Management
 ```bash
-# Search local and remote models with VRAM fit indicator
-./lms_cli.py search "llama-3.2"
+# Interactive model selection and loading
+./lms_cli.py switch
 
-# Download a model using its repo identifier
-./lms_cli.py download bartowski/Llama-3.2-1B-Instruct-GGUF
+# Real-time dashboard
+./lms_cli.py top
 
-# Check progress
-./lms_cli.py download-status
-```
-
-### Model Management
-Control what's in your GPU memory.
-```bash
-# Load with specific context and full GPU offload
-./lms_cli.py load <model_id> --context 32768 --gpu 1.0
-
-# Watch loaded models in real-time (dashboard mode)
-./lms_cli.py status --watch
-
-# Clear all models from memory
+# Clear all models from GPU immediately
 ./lms_cli.py unload --all
 ```
 
-### Performance & Interaction
-Chat or test your system's speed.
+### 3. Interaction (Active Model)
+If a model is loaded, you don't need to provide its ID.
 ```bash
-# Benchmark model speed (TTFT/TPS)
-./lms_cli.py bench <model_id>
+# Start a streaming, stateful conversation
+./lms_cli.py repl
 
-# Start an interactive, streaming session
-./lms_cli.py repl <model_id> --system "You are a helpful assistant."
+# Benchmark your GPU's generation speed (TTFT/TPS)
+./lms_cli.py bench
 
-# Quick streaming chat
-./lms_cli.py chat <model_id> "Write a hello world in Python" --stream
+# Quick chat with a specific persona
+./lms_cli.py chat "Explain quantum gravity" --system "You are a friendly cat." --stream
 ```
 
-### Integrations
-Generate configs for tools like OpenCode.
+### 4. Discovery & Download
 ```bash
-# Auto-detect coder and thinking models and generate config
-./lms_cli.py opencode > opencode.json
+# Find tool-capable models that fit your GPU
+./lms_cli.py search "qwen3 coder"
+
+# Download using repo ID (auto-converts to HF URL)
+./lms_cli.py download bartowski/Llama-3.2-1B-Instruct-GGUF
 ```
+
+### 5. Integrations
+```bash
+# Generate OpenCode config with auto-detected Planner/Coder models
+./lms_cli.py opencode --context 32768 > opencode.json
+```
+
+## 📋 Command Reference
+
+| Command | Description |
+| :--- | :--- |
+| `status` | Show server summary and loaded models. |
+| `list` | Detailed table of local models with VRAM/GPU/Caps. |
+| `switch` | Interactive list and load interface. |
+| `top` | Real-time server and download dashboard. |
+| `load` | Load a model with specific context/gpu settings. |
+| `unload` | Unload specific or all models. |
+| `search` | Discover models on Hugging Face with fit indicators. |
+| `repl` | Interactive streaming conversation mode. |
+| `bench` | Measure TTFT and Tokens Per Second. |
+| `opencode` | Generate highly compatible `opencode.json` files. |
 
 ## Requirements
 - Python 3.x
-- LM Studio (with Local Server enabled)
+- LM Studio (Local Server enabled on port 1234)
