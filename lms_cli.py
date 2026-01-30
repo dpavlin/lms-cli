@@ -115,11 +115,25 @@ class LMStudioClient:
         except Exception as e:
             print(f"Error listing models: {e}")
 
-    def info(self, model_id: str):
+    def info(self, model_id: Optional[str] = None):
         try:
             data = self._request("GET", "/api/v0/models")
-            model = next((m for m in data.get('data', []) if m['id'] == model_id), None)
-            if model:
+            models = data.get('data', [])
+            
+            if model_id:
+                model_list = [m for m in models if m['id'] == model_id]
+                if not model_list:
+                    print(f"Model '{model_id}' not found.")
+                    return
+            else:
+                model_list = [m for m in models if m.get('state') == 'loaded']
+                if not model_list:
+                    print("No models are currently loaded.")
+                    return
+                print(f"--- Info for all {len(model_list)} loaded model(s) ---")
+
+            for model in model_list:
+                if len(model_list) > 1: print(f"\n--- {model['id']} ---")
                 print(f"Model: {model['id']}")
                 print(f"  Type:         {model.get('type', 'N/A')}")
                 print(f"  Architecture: {model.get('arch', 'N/A')}")
@@ -127,8 +141,12 @@ class LMStudioClient:
                 print(f"  Max Context:  {model.get('max_context_length', 'N/A')}")
                 print(f"  Publisher:    {model.get('publisher', 'N/A')}")
                 print(f"  State:        {model.get('state', 'N/A')}")
-            else:
-                print(f"Model '{model_id}' not found.")
+                
+                caps = model.get('capabilities', [])
+                if caps:
+                    print(f"  Capabilities: {', '.join(caps)}")
+                else:
+                    print(f"  Capabilities: None reported by LM Studio")
         except Exception as e:
             print(f"Error: {e}")
 
@@ -440,7 +458,7 @@ def main():
     unl.add_argument("--all", action="store_true", help="Unload all currently loaded models")
     
     inf = s.add_parser("info", help="Get detailed model metadata (arch, quantization, etc.)")
-    inf.add_argument("model_id", help="The ID of the model to inspect")
+    inf.add_argument("model_id", nargs='?', help="The ID of the model to inspect (optional, shows all loaded if omitted)")
     
     src = s.add_parser("search", help="Search local library and discover models on Hugging Face")
     src.add_argument("query", help="Search term (e.g., 'llama', 'coder')")
