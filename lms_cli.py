@@ -156,8 +156,8 @@ class LMStudioClient:
             models = data.get('data', [])
             
             print(f"--- Switch Model (VRAM Limit: {vram_limit}GB) ---")
-            print(f" #  {'ID':<55}    | {'Size':>5} | {'VRAM Est':>8} | {'GPU %':>6} | {'Quant':<8} | {'Capabilities'}")
-            print(f" --{'-'*55}----|-------|----------|--------|----------|--------------------")
+            print(f" # {'ID':<55} | {'Size':>5} | {'VRAM Est':>8} | {'GPU %':>6} | {'Quant':<8} | {'Capabilities'}")
+            print(f" -{'-'*55}-|-------|----------|--------|----------|--------------------")
             
             current_vram_usage = 0
             
@@ -185,7 +185,7 @@ class LMStudioClient:
                 vram_str = f"~{vram_est:.1f}GB" if vram_est > 0 else "???"
                 
                 # Apply bold if loaded
-                line = f"{idx+1:2} {m_id:<55} {status_icon} | {size_str:>5} | {vram_str:>8} | {gpu_str:>6} | {quant:<8} | {caps}"
+                line = f"{idx+1:>2} {m_id:<52} {status_icon} | {size_str:>5} | {vram_str:>8} | {gpu_str:>6} | {quant:<8} | {caps}"
                 if is_loaded:
                     print(f"\033[1m{line}\033[0m")
                 else:
