@@ -112,9 +112,19 @@ class LMStudioClient:
     def list_models(self):
         print(f"Available Models at {self.base_url}:")
         try:
-            data = self._request("GET", "/v1/models")
-            for model in data.get('data', []):
-                print(f" - {model.get('id')}")
+            # Use v0 for richer metadata (quantization, capabilities)
+            data = self._request("GET", "/api/v0/models")
+            models = data.get('data', [])
+            
+            # Print header
+            print(f" {'ID':<55} | {'Quant':<8} | {'Capabilities'}")
+            print(f" {'-'*55} | {'-'*8} | {'-'*20}")
+            
+            for model in models:
+                m_id = model.get('id')
+                quant = model.get('quantization', 'N/A')
+                caps = ", ".join(model.get('capabilities', [])) or "None"
+                print(f" {m_id:<55} | {quant:<8} | {caps}")
         except Exception as e:
             print(f"Error listing models: {e}")
 
