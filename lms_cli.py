@@ -236,6 +236,36 @@ class LMStudioClient:
         except:
             print("No active download found with that ID or endpoint unavailable.")
 
+    def search(self, query: str):
+        # 1. Search Local Models
+        try:
+            data = self._request("GET", "/v1/models")
+            local_matches = [m['id'] for m in data.get('data', []) if query.lower() in m['id'].lower()]
+            if local_matches:
+                print(f"--- Local Models matching '{query}' ---")
+                for m in local_matches: print(f" - {m}")
+                print()
+        except: pass
+
+        # 2. Search Hugging Face (Discovery)
+        print(f"--- Searching Hugging Face for '{query}' (GGUF) ---")
+        hf_url = f"https://huggingface.co/api/models?search={query}&filter=gguf&sort=downloads&direction=-1&limit=10"
+        try:
+            req = urllib.request.Request(hf_url)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                models = json.loads(response.read().decode('utf-8'))
+                if not models:
+                    print("No models found on Hugging Face.")
+                    return
+                for m in models:
+                    m_id = m.get('modelId')
+                    downloads = m.get('downloads', 0)
+                    likes = m.get('likes', 0)
+                    print(f" - {m_id} (↓ {downloads}, ♥ {likes})")
+                print("\nUse './lms_cli.py download <model_id>' to start downloading.")
+        except Exception as e:
+            print(f"Hugging Face search failed: {e}")
+
     def presets(self):
         if not os.path.exists(PRESETS_DIR):
             print(f"Presets directory not found: {PRESETS_DIR}")
