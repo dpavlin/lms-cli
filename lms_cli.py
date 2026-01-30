@@ -239,6 +239,7 @@ class LMStudioClient:
                     return
                 
                 count = 0
+                displayed_models = []
                 for m in models:
                     if count >= 20: break
                     
@@ -270,12 +271,26 @@ class LMStudioClient:
                         if est_gb <= vram_limit: fit_icon = "🟢"
                         else: fit_icon = "🟡"
                     
-                    print(f" {fit_icon} {tool_icon} {m_id:<50} | {vram_est:>7} | ↓ {downloads}")
                     count += 1
+                    displayed_models.append(m_id)
+                    print(f"[{count:2}] {fit_icon} {m_id:<55} | {tool_icon} | {vram_est:>7} | ↓ {downloads}")
                 
                 print(f"\nShown {count} models that fit your hardware.")
                 print("Legend: 🟢 Fits  🟡 Tight  ⚪ Unknown size  🛠️ Tool Support")
-        except Exception as e: print(f"HF search failed: {e}")
+                
+                if sys.stdin.isatty():
+                    try:
+                        choice = input("\nEnter number to download (or Enter to skip): ").strip()
+                        if choice:
+                            idx = int(choice) - 1
+                            if 0 <= idx < len(displayed_models):
+                                self.download(displayed_models[idx])
+                            else:
+                                print("Invalid number.")
+                    except (ValueError, KeyboardInterrupt, EOFError):
+                        pass
+        except Exception as e:
+            print(f"HF search failed: {e}")
 
     def chat(self, model_id: str, message: str, system: Optional[str] = None, 
              stream: bool = False, temp: float = 0.7, max_tokens: int = -1, top_p: float = 1.0):
