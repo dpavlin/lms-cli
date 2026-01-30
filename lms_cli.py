@@ -117,7 +117,7 @@ class LMStudioClient:
             models = data.get('data', [])
             
             # Print header
-            print(f" {'ID':<55} | {'Size':<5} | {'VRAM Est':<8} | {'GPU %':<6} | {'Quant':<8} | {'Capabilities'}")
+            print(f" {'ID':<55} | {'Size':>5} | {'VRAM Est':>8} | {'GPU %':>6} | {'Quant':<8} | {'Capabilities'}")
             print(f" {'-'*55} | {'-'*5} | {'-'*8} | {'-'*6} | {'-'*8} | {'-'*20}")
             
             for model in models:
@@ -143,7 +143,7 @@ class LMStudioClient:
                     if is_loaded:
                         gpu_pct_str = f"*{gpu_pct_str}"
                 
-                print(f" {m_id:<55} | {size_str:<5} | {vram_est:<8} | {gpu_pct_str:<6} | {quant:<8} | {caps}")
+                print(f" {m_id:<55} | {size_str:>5} | {vram_est:>8} | {gpu_pct_str:>6} | {quant:<8} | {caps}")
             print(f"\nNote: GPU % is estimated against your {vram_limit}GB VRAM config.")
             print("      Asterisk (*) indicates the model is currently loaded in memory.")
         except Exception as e:
