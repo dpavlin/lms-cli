@@ -175,11 +175,20 @@ class LMStudioClient:
                     print("Unload failed. Ensure you use the correct ID.")
 
     def download(self, model_id: str):
+        # Auto-convert repo identifiers to HF URLs if needed
+        if not model_id.startswith("http"):
+            if "/" in model_id:
+                print(f"Converting '{model_id}' to Hugging Face URL...")
+                model_id = f"https://huggingface.co/{model_id}"
+        
         print(f"Requesting download for: {model_id}")
         try:
             resp = self._request("POST", "/api/v1/models/download", {"model": model_id})
             print(f"Download started: {json.dumps(resp, indent=2)}")
-        except Exception as e: print(f"Download failed: {e}")
+            if "job_id" in resp:
+                print(f"\nTrack progress with: ./lms_cli.py download-status {resp['job_id']}")
+        except Exception as e:
+            print(f"Download failed: {e}")
 
     def download_status(self, job_id: str = None):
         endpoint = "/api/v1/models/download/status"
