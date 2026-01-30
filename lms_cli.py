@@ -112,19 +112,34 @@ class LMStudioClient:
     def list_models(self):
         print(f"Available Models at {self.base_url}:")
         try:
-            # Use v0 for richer metadata (quantization, capabilities)
             data = self._request("GET", "/api/v0/models")
             models = data.get('data', [])
             
             # Print header
-            print(f" {'ID':<55} | {'Quant':<8} | {'Capabilities'}")
-            print(f" {'-'*55} | {'-'*8} | {'-'*20}")
+            print(f" {'ID':<55} | {'Size':<5} | {'VRAM Est':<8} | {'Quant':<8} | {'GPU':<5} | {'Capabilities'}")
+            print(f" {'-'*55} | {'-'*5} | {'-'*8} | {'-'*8} | {'-'*5} | {'-'*20}")
             
             for model in models:
                 m_id = model.get('id')
                 quant = model.get('quantization', 'N/A')
                 caps = ", ".join(model.get('capabilities', [])) or "None"
-                print(f" {m_id:<55} | {quant:<8} | {caps}")
+                
+                # Heuristic for Size and VRAM
+                match = re.search(r'(\d+(?:\.\d+)?)[bB]', m_id)
+                size_str = "???"
+                vram_est = "???"
+                if match:
+                    params = float(match.group(1))
+                    size_str = f"{params:g}B"
+                    est_gb = (params * 0.6) + 1.5
+                    vram_est = f"~{est_gb:.1f}GB"
+                
+                gpu = "  -  "
+                if model.get('state') == 'loaded':
+                    gpu = "100%*" # Assume 100% offload if loaded
+                
+                print(f" {m_id:<55} | {size_str:<5} | {vram_est:<8} | {quant:<8} | {gpu:<5} | {caps}")
+            print("\nNote: GPU usage is estimated as 100% offload for loaded models (API limit).")
         except Exception as e:
             print(f"Error listing models: {e}")
 
