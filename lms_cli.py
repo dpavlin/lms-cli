@@ -16,7 +16,8 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DEFAULT_CONFIG = {
     "base_url": "http://localhost:1234",
     "timeout": 30,
-    "vram_gb": 12.0
+    "vram_gb": 12.0,
+    "default_context": 32768
 }
 PRESETS_DIR = os.path.expanduser("~/.lmstudio/config-presets")
 
@@ -45,10 +46,11 @@ class ConfigManager:
         return self.config.get(key)
 
 class LMStudioClient:
-    def __init__(self, base_url: str, timeout: int, vram_gb: float = 12.0):
+    def __init__(self, base_url: str, timeout: int, vram_gb: float = 12.0, default_context: int = 32768):
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
         self.vram_gb = vram_gb
+        self.default_context = default_context
 
     def _request(self, method: str, endpoint: str, data: Optional[Dict] = None, stream: bool = False) -> Any:
         url = f"{self.base_url}{endpoint}"
@@ -152,9 +154,9 @@ class LMStudioClient:
             print(f"Error: {e}")
 
     def load(self, model_id: str, context: Optional[int] = None, gpu: Optional[float] = None):
-        print(f"Loading {model_id}...", file=sys.stderr)
-        payload = {"model": model_id}
-        if context: payload["context_length"] = context
+        ctx = context or self.default_context
+        print(f"Loading {model_id} (context: {ctx})...", file=sys.stderr)
+        payload = {"model": model_id, "context_length": ctx}
         if gpu is not None:
             payload["gpu_layers"] = int(gpu) if gpu > 1 else -1
         try:
@@ -407,7 +409,8 @@ class LMStudioClient:
             print("Local Presets:")
             for f in files: print(f" - {f[:-5]}")
 
-    def opencode(self, coder_id: Optional[str] = None, thinking_id: Optional[str] = None, context: int = 32768):
+    def opencode(self, coder_id: Optional[str] = None, thinking_id: Optional[str] = None, context: Optional[int] = None):
+        ctx_size = context or self.default_context
         print("Generating OpenCode configuration...", file=sys.stderr)
         try:
             data = self._request("GET", "/api/v0/models")
@@ -421,7 +424,7 @@ class LMStudioClient:
                         "options": {
                             "baseURL": f"{self.base_url}/v1",
                             "headers": {
-                                "X-LM-Context-Length": str(context)
+                                "X-LM-Context-Length": str(ctx_size)
                             }
                         }, 
                         "models": {}
@@ -432,7 +435,7 @@ class LMStudioClient:
             think, code = None, None
             for m in models:
                 mid = m['id']
-                model_cfg = {"name": mid, "options": {"contextLength": context}}
+                model_cfg = {"name": mid, "options": {"contextLength": ctx_size}}
                 if "capabilities" in m: model_cfg["capabilities"] = m["capabilities"]
                 mid_l = mid.lower()
                 if ("coder" in mid_l or "thinking" in mid_l or "reasoning" in mid_l) and "tool_use" not in model_cfg.get("capabilities", []):
@@ -453,6 +456,7 @@ class LMStudioClient:
             print(json.dumps(cfg, indent=4))
         except Exception as e:
             print(f"Failed to generate OpenCode config: {e}", file=sys.stderr)
+                
 
     def templates(self):
         t = {
@@ -479,6 +483,7 @@ def main():
     conf.add_argument("--url", help="Set the LM Studio base URL")
     conf.add_argument("--timeout", type=int, help="Set the request timeout in seconds")
     conf.add_argument("--vram", type=float, help="Set your GPU's VRAM in GB (for fit estimation)")
+    conf.add_argument("--context", type=int, help="Set default context length for loading models")
     conf.add_argument("--show", action="store_true", help="Show current configuration")
     
     stat = s.add_parser("status", help="Show server summary and loaded models")
@@ -490,7 +495,7 @@ def main():
     
     load = s.add_parser("load", help="Load a model with optional settings")
     load.add_argument("model_id", help="The ID of the model to load")
-    load.add_argument("--context", type=int, help="Set context length (e.g., 32768)")
+    load.add_argument("--context", type=int, help="Set context length (overrides default)")
     load.add_argument("--gpu", type=float, help="Set GPU offload ratio (0.0 to 1.0) or layer count")
     
     unl = s.add_parser("unload", help="Unload models from memory")
@@ -535,10 +540,10 @@ def main():
     em.add_argument("model_id", help="The ID of the model to use")
     em.add_argument("input", help="The text to generate embeddings for")
     
-    op = s.add_parser("opencode", help="Generate an OpenCode-compatible configuration")
-    op.add_argument("--coder", help="Manually specify the coder model ID")
-    op.add_argument("--think", help="Manually specify the thinking/planning model ID")
-    op.add_argument("--context", type=int, default=32768, help="Context size for generated config (default: 32768)")
+    op = s.add_parser("opencode", help="Generate OpenCode json config")
+    op.add_argument("--coder", help="Manual override for coder model ID")
+    op.add_argument("--think", help="Manual override for thinking model ID")
+    op.add_argument("--context", type=int, help="Context size for generated config (overrides default)")
     
     s.add_parser("templates", help="Show useful system prompt templates")
     
@@ -549,13 +554,14 @@ def main():
     
     args = p.parse_args()
     m = ConfigManager()
-    c = LMStudioClient(m.get("base_url"), m.get("timeout"), m.get("vram_gb"))
+    c = LMStudioClient(m.get("base_url"), m.get("timeout"), m.get("vram_gb"), m.get("default_context"))
     
     if args.cmd == "config":
         if args.url: m.save_config("base_url", args.url)
         if args.timeout: m.save_config("timeout", args.timeout)
         if args.vram: m.save_config("vram_gb", args.vram)
-        if args.show or (not args.url and not args.timeout and not args.vram): print(json.dumps(m.config, indent=4))
+        if args.context: m.save_config("default_context", args.context)
+        if args.show or (not args.url and not args.timeout and not args.vram and not args.context): print(json.dumps(m.config, indent=4))
     elif args.cmd == "status": c.status(args.watch)
     elif args.cmd in ["list", "models"]: c.list_models()
     elif args.cmd == "check": c.check()
