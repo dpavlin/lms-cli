@@ -71,16 +71,27 @@ If a model is loaded, you don't need to provide its ID.
 
 | Command | Description |
 | :--- | :--- |
-| `status` | Show server summary and loaded models. |
-| `list` | Detailed table of local models with VRAM/GPU/Caps. |
-| `switch` | Interactive list and load interface. |
-| `top` | Real-time server and download dashboard. |
-| `load` | Load a model with specific context/gpu settings. |
-| `unload` | Unload specific or all models. |
-| `search` | Discover models on Hugging Face with fit indicators. |
-| `repl` | Interactive streaming conversation mode. |
-| `bench` | Measure TTFT and Tokens Per Second. |
-| `opencode` | Generate highly compatible `opencode.json` files. |
+| `config` | Manage CLI settings like base URL, VRAM, and default context. |
+| `status` | Show server summary and currently loaded models. |
+| `list` | Detailed table of local models (alias: `models`). |
+| `switch` | Interactive list and load interface with VRAM management. |
+| `top` | Real-time server dashboard and background download tracker. |
+| `check` | Quick connectivity check to the LM Studio server. |
+| `info` | Get detailed technical metadata for a specific model. |
+| `load` | Load a model into memory with optional settings. |
+| `unload` | Clear specific models or all models from VRAM. |
+| `search` | Discover models on Hugging Face with "Smart Fit" indicators. |
+| `download` | Download models from Hugging Face (auto-URL conversion). |
+| `download-status` | Track progress of active background downloads. |
+| `presets` | List local LM Studio configuration presets. |
+| `chat` | Send a single message (supports streaming and system prompts). |
+| `repl` | Start an interactive, stateful, streaming conversation session. |
+| `bench` | Measure model performance (TTFT and Tokens Per Second). |
+| `complete` | Perform classic non-chat text completion. |
+| `embeddings` | Generate vector embeddings for text input. |
+| `opencode` | Generate highly compatible `opencode.json` config files. |
+| `templates` | Show a collection of optimized system prompt templates. |
+| `raw` | Send arbitrary HTTP requests to the LM Studio API. |
 
 ## Requirements
 - Python 3.x
