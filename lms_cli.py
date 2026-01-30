@@ -159,12 +159,21 @@ class LMStudioClient:
         except Exception as e:
             print(f"Error listing models: {e}")
 
-    def switch(self):
+    def switch(self, query: Optional[str] = None):
         vram_limit = self.vram_gb
         try:
             data = self._request("GET", "/api/v0/models")
-            models = data.get('data', [])
+            all_models = data.get('data', [])
             
+            # Filter models if query is provided
+            if query:
+                models = [m for m in all_models if query.lower() in m['id'].lower()]
+                if not models:
+                    print(f"No models matching '{query}' found.")
+                    return
+            else:
+                models = all_models
+
             print(f"--- Switch Model (VRAM Limit: {vram_limit}GB) ---")
             print(f" # {'ID':<55} | {'Size':>5} | {'VRAM Est':>8} | {'GPU %':>6} | {'Quant':<8} | {'Capabilities'}")
             print(f" -{'-'*55}-|-------|----------|--------|----------|--------------------")
@@ -744,7 +753,8 @@ def main():
     
     s.add_parser("list", help="List all models in your local library")
     s.add_parser("models", help="Alias for 'list'")
-    s.add_parser("switch", help="Interactively select a model to load, with VRAM management")
+    sw = s.add_parser("switch", help="Interactively select a model to load, with VRAM management")
+    sw.add_argument("query", nargs='?', help="Optional partial model name to filter the list")
     s.add_parser("check", help="Quick connectivity check to the server")
     
     load = s.add_parser("load", help="Load a model with optional settings")
@@ -828,7 +838,7 @@ def main():
         if args.show or (not args.url and not args.timeout and not args.vram and not args.context): print(json.dumps(m.config, indent=4))
     elif args.cmd == "status": c.status(args.watch)
     elif args.cmd in ["list", "models"]: c.list_models()
-    elif args.cmd == "switch": c.switch()
+    elif args.cmd == "switch": c.switch(args.query)
     elif args.cmd == "check": c.check()
     elif args.cmd == "info": c.info(args.model_id)
     elif args.cmd == "load": c.load(args.model_id, args.context, args.gpu)
