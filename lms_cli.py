@@ -192,10 +192,12 @@ class LMStudioClient:
         }
         for n, p in t.items(): print(f"[{n}]: {p}")
 
-    def opencode(self):
+    def opencode(self, coder_id: Optional[str] = None, thinking_id: Optional[str] = None):
+        print("Generating OpenCode configuration...", file=sys.stderr)
         try:
             data = self._request("GET", "/api/v0/models")
             models = data.get('data', [])
+            
             cfg = {
                 "$schema": "https://opencode.ai/config.json",
                 "provider": {
@@ -208,23 +210,52 @@ class LMStudioClient:
                 },
                 "agent": {}
             }
-            think, code = None, None
+            
+            detected_think, detected_code = None, None
             for m in models:
                 mid = m['id']
-                cfg["provider"]["lmstudio"]["models"][mid] = {"name": mid}
-                if "thinking" in mid.lower() or "reasoning" in mid.lower():
-                    if not think: think = mid
-                if "coder" in mid.lower():
-                    if not code: code = mid
-            default = code or (models[0]['id'] if models else None)
-            if default: cfg["model"] = f"lmstudio/{default}"
-            if think:
+                model_cfg = {"name": mid}
+                
+                # Copy existing capabilities (like tool_use) if present
+                if "capabilities" in m:
+                    model_cfg["capabilities"] = m["capabilities"]
+                
+                # Force tool_use for models known to support it if not already tagged
+                mid_lower = mid.lower()
+                is_coder = "coder" in mid_lower
+                is_think = "thinking" in mid_lower or "reasoning" in mid_lower
+                
+                if (is_coder or is_think) and "tool_use" not in model_cfg.get("capabilities", []):
+                    if "capabilities" not in model_cfg:
+                        model_cfg["capabilities"] = []
+                    model_cfg["capabilities"].append("tool_use")
+                
+                cfg["provider"]["lmstudio"]["models"][mid] = model_cfg
+                
+                if not detected_think and is_think:
+                    detected_think = mid
+                if not detected_code and is_coder:
+                    if "7b" in mid_lower or "8b" in mid_lower:
+                        detected_code = mid
+            
+            # Use manual overrides or detected models
+            final_code = coder_id or detected_code or (models[0]['id'] if models else None)
+            final_think = thinking_id or detected_think
+            
+            if final_code:
+                cfg["model"] = f"lmstudio/{final_code}"
+                print(f"Using Coder: {final_code}", file=sys.stderr)
+            
+            if final_think:
                 cfg["agent"]["plan"] = {
-                    "model": f"lmstudio/{think}",
+                    "model": f"lmstudio/{final_think}",
                     "tools": {"write": False, "edit": False, "patch": False, "bash": False}
                 }
+                print(f"Using Planner: {final_think}", file=sys.stderr)
+                
             print(json.dumps(cfg, indent=4))
-        except Exception as e: print(f"Failed: {e}")
+        except Exception as e:
+            print(f"Failed: {e}", file=sys.stderr)
 
     def raw(self, method: str, endpoint: str, data: Optional[str] = None):
         try:
@@ -276,7 +307,10 @@ def main():
     em.add_argument("model_id")
     em.add_argument("input")
     
-    s.add_parser("opencode")
+    op = s.add_parser("opencode", help="Generate OpenCode json config")
+    op.add_argument("--coder", help="Manual override for coder model ID")
+    op.add_argument("--think", help="Manual override for thinking model ID")
+    
     s.add_parser("templates")
     
     rw = s.add_parser("raw")
@@ -303,7 +337,7 @@ def main():
     elif args.cmd == "chat": c.chat(args.model_id, args.msg, args.system)
     elif args.cmd == "complete": c.complete(args.model_id, args.prompt)
     elif args.cmd == "embeddings": c.embeddings(args.model_id, args.input)
-    elif args.cmd == "opencode": c.opencode()
+    elif args.cmd == "opencode": c.opencode(args.coder, args.think)
     elif args.cmd == "templates": c.templates()
     elif args.cmd == "raw": c.raw(args.method, args.endpoint, args.data)
     else: p.print_help()
