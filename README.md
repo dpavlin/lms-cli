@@ -1,15 +1,28 @@
 # LM Studio CLI Utility
 
-A comprehensive Python-based CLI utility for interacting with [LM Studio](https://lmstudio.ai/). This tool provides an easy-to-use interface for managing models, performing chat/completions, and generating configurations for external tools like OpenCode.
+A professional Python-based CLI utility for interacting with [LM Studio](https://lmstudio.ai/). This tool provides a powerful interface for model management, streaming interactions, performance benchmarking, and hardware-aware model discovery.
 
 ## Features
 
-- **Model Management**: List, search, load, and unload models with specific configurations.
-- **Dynamic Configuration**: Change context length and GPU offload settings on the fly.
-- **Interactions**: Perform single-turn chat, text completions, and generate embeddings.
-- **Status Monitoring**: Check server availability and see currently loaded models with their allocated context sizes.
-- **Integrations**: Automatically generate `opencode.json` for [OpenCode](https://opencode.ai/) with specialized agents for planning (thinking models) and execution (coder models).
-- **Utility Tools**: Quick access to system prompt templates for common tasks (Coder, Logic, Creative, etc.).
+- **Advanced Model Management**:
+    - List, search, load, and unload models.
+    - **`unload --all`**: Instantly clear all models from VRAM.
+    - **`download`**: Auto-converts Hugging Face repo IDs to full URLs.
+    - **`download-status`**: Track background download progress.
+- **Hardware-Aware Search**:
+    - **VRAM Estimation**: Automatically estimates if a model will fit on your GPU based on your configured VRAM capacity.
+    - **Hugging Face Discovery**: Search the HF Hub for new GGUF models directly from your terminal.
+- **High-Performance Interactions**:
+    - **`chat --stream`**: Real-time token streaming for chat.
+    - **`repl`**: Interactive, stateful, streaming conversation mode.
+    - **`bench`**: Measure **Time to First Token (TTFT)** and **Tokens Per Second (TPS)**.
+- **Dynamic Configuration**:
+    - Set `base_url`, `timeout`, and `vram_gb` (for fit estimations).
+    - Configure `context_length` and `gpu_layers` per model load.
+- **Integrations & Utilities**:
+    - **OpenCode**: Automatically generate `opencode.json` with auto-detected Planner (thinking) and Coder models.
+    - **Presets**: List local LM Studio configuration presets.
+    - **Templates**: Quick access to optimized system prompts.
 
 ## Installation
 
@@ -23,39 +36,58 @@ A comprehensive Python-based CLI utility for interacting with [LM Studio](https:
 ## Usage
 
 ### Configuration
-By default, the CLI looks for LM Studio at `http://localhost:1234`.
+Set up your environment and hardware limits.
 ```bash
-# Update the base URL
-./lms_cli.py config --url http://192.168.1.10:1234
+# Set your GPU's VRAM capacity (used for fit estimation in 'search')
+./lms_cli.py config --vram 12.0
 
 # Show current config
 ./lms_cli.py config --show
 ```
 
-### Model Management
+### Model Discovery & Download
+Find models that fit your hardware and download them.
 ```bash
-# List available models
-./lms_cli.py list
+# Search local and remote models with VRAM fit indicator
+./lms_cli.py search "llama-3.2"
 
-# Load a model with 32k context and full GPU offload
-./lms_cli.py load <model_id> --context 32768 --gpu 1.0
+# Download a model using its repo identifier
+./lms_cli.py download bartowski/Llama-3.2-1B-Instruct-GGUF
 
-# Unload a specific instance
-./lms_cli.py unload <instance_id>
+# Check progress
+./lms_cli.py download-status
 ```
 
-### Interactions
+### Model Management
+Control what's in your GPU memory.
 ```bash
-# Quick chat with a system prompt
-./lms_cli.py chat <model_id> "Refactor this code..." --system "You are a senior Rust engineer."
+# Load with specific context and full GPU offload
+./lms_cli.py load <model_id> --context 32768 --gpu 1.0
 
-# Get useful templates
-./lms_cli.py templates
+# Watch loaded models in real-time (dashboard mode)
+./lms_cli.py status --watch
+
+# Clear all models from memory
+./lms_cli.py unload --all
+```
+
+### Performance & Interaction
+Chat or test your system's speed.
+```bash
+# Benchmark model speed (TTFT/TPS)
+./lms_cli.py bench <model_id>
+
+# Start an interactive, streaming session
+./lms_cli.py repl <model_id> --system "You are a helpful assistant."
+
+# Quick streaming chat
+./lms_cli.py chat <model_id> "Write a hello world in Python" --stream
 ```
 
 ### Integrations
+Generate configs for tools like OpenCode.
 ```bash
-# Generate OpenCode config
+# Auto-detect coder and thinking models and generate config
 ./lms_cli.py opencode > opencode.json
 ```
 
