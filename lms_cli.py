@@ -223,16 +223,8 @@ class LMStudioClient:
             target_model = models[sel_idx]
             t_id = target_model['id']
             
-            # Estimate target vram
-            t_match = re.search(r'(\d+(?:\.\d+)?)[bB]', t_id)
-            t_vram = (float(t_match.group(1)) * 0.6) + 1.5 if t_match else 0
-            
-            # Check if it fits
-            if current_vram_usage + t_vram > vram_limit * 1.05: # 5% grace
-                print(f"\n⚠️  Warning: Loading '{t_id}' may exceed VRAM limit.")
-                confirm = input("Unload all currently loaded models first? (Y/n): ").strip().lower()
-                if confirm != 'n':
-                    self.unload(all_models=True)
+            # Always unload all models first
+            self.unload(all_models=True)
             
             self.load(t_id)
             
