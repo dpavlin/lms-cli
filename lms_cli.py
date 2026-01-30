@@ -227,9 +227,9 @@ class LMStudioClient:
         except: pass
 
         print(f"--- Searching Hugging Face for '{query}' (GGUF) ---")
-        print(f" (Estimating fit for {vram_limit}GB VRAM)")
+        print(f" (Hiding models > {vram_limit}GB VRAM)")
         encoded_query = urllib.parse.quote(query)
-        hf_url = f"https://huggingface.co/api/models?search={encoded_query}&filter=gguf&sort=downloads&direction=-1&limit=10"
+        hf_url = f"https://huggingface.co/api/models?search={encoded_query}&filter=gguf&sort=downloads&direction=-1&limit=100"
         try:
             req = urllib.request.Request(hf_url)
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -237,21 +237,32 @@ class LMStudioClient:
                 if not models:
                     print("No models found on Hugging Face.")
                     return
+                
+                count = 0
                 for m in models:
+                    if count >= 20: break
+                    
                     m_id = m.get('modelId')
                     downloads = m.get('downloads', 0)
                     match = re.search(r'(\d+)b', m_id.lower())
                     vram_est = "???"
                     fit_icon = "⚪"
+                    
                     if match:
                         params = int(match.group(1))
                         est_gb = (params * 0.6) + 1.5
+                        if est_gb > vram_limit * 1.1: # Skip if clearly too big
+                            continue
+                        
                         vram_est = f"~{est_gb:.1f}GB"
                         if est_gb <= vram_limit: fit_icon = "🟢"
-                        elif est_gb <= vram_limit * 1.2: fit_icon = "🟡"
-                        else: fit_icon = "🔴"
+                        else: fit_icon = "🟡"
+                    
                     print(f" {fit_icon} {m_id:<50} | {vram_est:>7} | ↓ {downloads}")
-                print("\nLegend: 🟢 Fits  🟡 Tight  🔴 Likely OOM  ⚪ Unknown")
+                    count += 1
+                
+                print(f"\nShown {count} models that fit your hardware.")
+                print("Legend: 🟢 Fits  🟡 Tight  ⚪ Unknown size")
         except Exception as e: print(f"HF search failed: {e}")
 
     def chat(self, model_id: str, message: str, system: Optional[str] = None, 
