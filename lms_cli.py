@@ -175,20 +175,16 @@ class LMStudioClient:
                     print("Unload failed. Ensure you use the correct ID.")
 
     def download(self, model_id: str):
-        # Auto-convert repo identifiers to HF URLs if needed
-        if not model_id.startswith("http"):
-            if "/" in model_id:
-                print(f"Converting '{model_id}' to Hugging Face URL...")
-                model_id = f"https://huggingface.co/{model_id}"
-        
+        if not model_id.startswith("http") and "/" in model_id:
+            print(f"Converting '{model_id}' to Hugging Face URL...")
+            model_id = f"https://huggingface.co/{model_id}"
         print(f"Requesting download for: {model_id}")
         try:
             resp = self._request("POST", "/api/v1/models/download", {"model": model_id})
             print(f"Download started: {json.dumps(resp, indent=2)}")
             if "job_id" in resp:
                 print(f"\nTrack progress with: ./lms_cli.py download-status {resp['job_id']}")
-        except Exception as e:
-            print(f"Download failed: {e}")
+        except Exception as e: print(f"Download failed: {e}")
 
     def download_status(self, job_id: str = None):
         endpoint = "/api/v1/models/download/status"
@@ -202,7 +198,6 @@ class LMStudioClient:
 
     def search(self, query: str):
         vram_limit = self.vram_gb
-        # 1. Search Local
         try:
             data = self._request("GET", "/v1/models")
             local = [m['id'] for m in data.get('data', []) if query.lower() in m['id'].lower()]
@@ -212,7 +207,6 @@ class LMStudioClient:
                 print()
         except: pass
 
-        # 2. Search Remote
         print(f"--- Searching Hugging Face for '{query}' (GGUF) ---")
         print(f" (Estimating fit for {vram_limit}GB VRAM)")
         hf_url = f"https://huggingface.co/api/models?search={query}&filter=gguf&sort=downloads&direction=-1&limit=10"
@@ -355,7 +349,7 @@ class LMStudioClient:
             print("Local Presets:")
             for f in files: print(f" - {f[:-5]}")
 
-    def opencode(self, coder_id: Optional[str] = None, thinking_id: Optional[str] = None):
+    def opencode(self, coder_id: Optional[str] = None, thinking_id: Optional[str] = None, context: int = 32768):
         print("Generating OpenCode configuration...", file=sys.stderr)
         try:
             data = self._request("GET", "/api/v0/models")
@@ -366,7 +360,12 @@ class LMStudioClient:
                     "lmstudio": {
                         "npm": "@ai-sdk/openai-compatible", 
                         "name": "LM Studio", 
-                        "options": {"baseURL": f"{self.base_url}/v1"}, 
+                        "options": {
+                            "baseURL": f"{self.base_url}/v1",
+                            "headers": {
+                                "X-LM-Context-Length": str(context)
+                            }
+                        }, 
                         "models": {}
                     }
                 }, 
@@ -375,7 +374,7 @@ class LMStudioClient:
             think, code = None, None
             for m in models:
                 mid = m['id']
-                model_cfg = {"name": mid}
+                model_cfg = {"name": mid, "options": {"contextLength": context}}
                 if "capabilities" in m: model_cfg["capabilities"] = m["capabilities"]
                 mid_l = mid.lower()
                 if ("coder" in mid_l or "thinking" in mid_l or "reasoning" in mid_l) and "tool_use" not in model_cfg.get("capabilities", []):
@@ -394,7 +393,8 @@ class LMStudioClient:
                 cfg["agent"]["plan"] = {"model": f"lmstudio/{final_think}", "tools": {"write": False, "edit": False, "patch": False, "bash": False}}
                 print(f"Using Planner: {final_think}", file=sys.stderr)
             print(json.dumps(cfg, indent=4))
-        except Exception as e: print(f"Failed to generate OpenCode config: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Failed to generate OpenCode config: {e}", file=sys.stderr)
 
     def templates(self):
         t = {
@@ -449,7 +449,7 @@ def main():
     dl.add_argument("model_id")
     
     ds = s.add_parser("download-status", help="Check download progress")
-    ds.add_argument("job_id", nargs='?', help="Specific job ID")
+    ds.add_argument("job_id", nargs='?')
     
     s.add_parser("presets", help="List local LM Studio presets")
     
@@ -478,10 +478,11 @@ def main():
     em.add_argument("input")
     
     op = s.add_parser("opencode", help="Generate OpenCode json config")
-    op.add_argument("--coder", help="Manual coder ID")
-    op.add_argument("--think", help="Manual thinking ID")
+    op.add_argument("--coder", help="Manual override for coder model ID")
+    op.add_argument("--think", help="Manual override for thinking model ID")
+    op.add_argument("--context", type=int, default=32768, help="Context size for all models (default: 32768)")
     
-    s.add_parser("templates", help="Show system prompt templates")
+    s.add_parser("templates", help="Show useful system prompt templates")
     
     rw = s.add_parser("raw", help="Send a raw API request")
     rw.add_argument("method", choices=["GET", "POST"])
@@ -512,7 +513,7 @@ def main():
     elif args.cmd == "bench": c.bench(args.model_id)
     elif args.cmd == "complete": c.complete(args.model_id, args.prompt)
     elif args.cmd == "embeddings": c.embeddings(args.model_id, args.input)
-    elif args.cmd == "opencode": c.opencode(args.coder, args.think)
+    elif args.cmd == "opencode": c.opencode(args.coder, args.think, args.context)
     elif args.cmd == "templates": c.templates()
     elif args.cmd == "raw": c.raw(args.method, args.endpoint, args.data)
     else: p.print_help()
