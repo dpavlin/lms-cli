@@ -236,6 +236,10 @@ class LMStudioClient:
             
             self.load(t_id)
             
+            # Verification chat
+            print(f"\nVerifying {t_id} is responding...")
+            self.chat(t_id, "ping", max_tokens=10, stream=True)
+            
         except (ValueError, KeyboardInterrupt, EOFError):
             pass
         except Exception as e:
