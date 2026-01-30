@@ -330,22 +330,58 @@ class LMStudioClient:
         if not model_id.startswith("http") and "/" in model_id:
             print(f"Converting '{model_id}' to Hugging Face URL...")
             model_id = f"https://huggingface.co/{model_id}"
+        
         print(f"Requesting download for: {model_id}")
         try:
             resp = self._request("POST", "/api/v1/models/download", {"model": model_id})
-            print(f"Download started: {json.dumps(resp, indent=2)}")
-            if "job_id" in resp:
-                print(f"\nTrack progress with: ./lms_cli.py download-status {resp['job_id']}")
-        except Exception as e: print(f"Download failed: {e}")
+            job_id = resp.get('job_id')
+            if not job_id:
+                print(f"Download started: {json.dumps(resp, indent=2)}")
+                return
+            
+            print(f"Download started (Job ID: {job_id})")
+            
+            # Monitoring loop
+            try:
+                while True:
+                    status = self.download_status(job_id, internal=True)
+                    if not status:
+                        print("\nLost track of download job.")
+                        break
+                    
+                    state = status.get('status', 'unknown')
+                    total = status.get('total_size_bytes', 0)
+                    cur = status.get('downloaded_bytes', 0)
+                    speed = status.get('bytes_per_second', 0) / 1024 / 1024
+                    
+                    prog = (cur / total * 100) if total > 0 else 0
+                    
+                    print(f"\rProgress: [{'#'*int(prog/5):<20}] {prog:>3.0f}% | {speed:>6.1f} MB/s | {state}", end="", flush=True)
+                    
+                    if state == 'completed':
+                        print("\n✅ Download finished successfully.")
+                        break
+                    if state == 'failed':
+                        print(f"\n❌ Download failed: {status.get('error', 'Unknown error')}")
+                        break
+                    
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print(f"\nStopped monitoring. Download continues in background (Job: {job_id})")
+                
+        except Exception as e:
+            print(f"Download failed: {e}")
 
-    def download_status(self, job_id: str = None):
+    def download_status(self, job_id: str = None, internal: bool = False):
         endpoint = "/api/v1/models/download/status"
         if job_id: endpoint += f"/{job_id}"
         try:
             data = self._request("GET", endpoint)
+            if internal: return data
             print("Download Status:")
             print(json.dumps(data, indent=4))
         except:
+            if internal: return None
             print("No active download found or endpoint unavailable.")
 
     def search(self, query: str):
