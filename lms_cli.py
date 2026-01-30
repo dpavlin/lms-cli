@@ -110,36 +110,42 @@ class LMStudioClient:
         except KeyboardInterrupt: pass
 
     def list_models(self):
+        vram_limit = self.vram_gb
         print(f"Available Models at {self.base_url}:")
         try:
             data = self._request("GET", "/api/v0/models")
             models = data.get('data', [])
             
             # Print header
-            print(f" {'ID':<55} | {'Size':<5} | {'VRAM Est':<8} | {'Quant':<8} | {'GPU':<5} | {'Capabilities'}")
-            print(f" {'-'*55} | {'-'*5} | {'-'*8} | {'-'*8} | {'-'*5} | {'-'*20}")
+            print(f" {'ID':<55} | {'Size':<5} | {'VRAM Est':<8} | {'GPU %':<6} | {'Quant':<8} | {'Capabilities'}")
+            print(f" {'-'*55} | {'-'*5} | {'-'*8} | {'-'*6} | {'-'*8} | {'-'*20}")
             
             for model in models:
                 m_id = model.get('id')
                 quant = model.get('quantization', 'N/A')
                 caps = ", ".join(model.get('capabilities', [])) or "None"
+                is_loaded = model.get('state') == 'loaded'
                 
                 # Heuristic for Size and VRAM
                 match = re.search(r'(\d+(?:\.\d+)?)[bB]', m_id)
                 size_str = "???"
                 vram_est = "???"
+                gpu_pct_str = "  -  "
+                
                 if match:
                     params = float(match.group(1))
                     size_str = f"{params:g}B"
                     est_gb = (params * 0.6) + 1.5
                     vram_est = f"~{est_gb:.1f}GB"
+                    
+                    pct = (est_gb / vram_limit) * 100
+                    gpu_pct_str = f"{int(pct)}%"
+                    if is_loaded:
+                        gpu_pct_str = f"*{gpu_pct_str}"
                 
-                gpu = "  -  "
-                if model.get('state') == 'loaded':
-                    gpu = "100%*" # Assume 100% offload if loaded
-                
-                print(f" {m_id:<55} | {size_str:<5} | {vram_est:<8} | {quant:<8} | {gpu:<5} | {caps}")
-            print("\nNote: GPU usage is estimated as 100% offload for loaded models (API limit).")
+                print(f" {m_id:<55} | {size_str:<5} | {vram_est:<8} | {gpu_pct_str:<6} | {quant:<8} | {caps}")
+            print(f"\nNote: GPU % is estimated against your {vram_limit}GB VRAM config.")
+            print("      Asterisk (*) indicates the model is currently loaded in memory.")
         except Exception as e:
             print(f"Error listing models: {e}")
 
