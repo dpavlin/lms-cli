@@ -13,7 +13,8 @@ CONFIG_DIR = os.path.expanduser("~/.config/lms-cli")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DEFAULT_CONFIG = {
     "base_url": "http://localhost:1234",
-    "timeout": 30
+    "timeout": 30,
+    "vram_gb": 12.0
 }
 PRESETS_DIR = os.path.expanduser("~/.lmstudio/config-presets")
 
@@ -42,9 +43,10 @@ class ConfigManager:
         return self.config.get(key)
 
 class LMStudioClient:
-    def __init__(self, base_url: str, timeout: int):
+    def __init__(self, base_url: str, timeout: int, vram_gb: float = 12.0):
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
+        self.vram_gb = vram_gb
 
     def _request(self, method: str, endpoint: str, data: Optional[Dict] = None, stream: bool = False) -> Any:
         url = f"{self.base_url}{endpoint}"
@@ -237,6 +239,8 @@ class LMStudioClient:
             print("No active download found with that ID or endpoint unavailable.")
 
     def search(self, query: str):
+        vram_limit = self.vram_gb
+        
         # 1. Search Local Models
         try:
             data = self._request("GET", "/v1/models")
@@ -249,6 +253,7 @@ class LMStudioClient:
 
         # 2. Search Hugging Face (Discovery)
         print(f"--- Searching Hugging Face for '{query}' (GGUF) ---")
+        print(f" (Estimating fit for {vram_limit}GB VRAM)")
         hf_url = f"https://huggingface.co/api/models?search={query}&filter=gguf&sort=downloads&direction=-1&limit=10"
         try:
             req = urllib.request.Request(hf_url)
@@ -260,9 +265,29 @@ class LMStudioClient:
                 for m in models:
                     m_id = m.get('modelId')
                     downloads = m.get('downloads', 0)
-                    likes = m.get('likes', 0)
-                    print(f" - {m_id} (↓ {downloads}, ♥ {likes})")
-                print("\nUse './lms_cli.py download <model_id>' to start downloading.")
+                    
+                    # Heuristic VRAM estimation
+                    # Pattern match: 7b, 14b, 70b etc
+                    import re
+                    match = re.search(r'(\d+)b', m_id.lower())
+                    vram_est = "???"
+                    fit_icon = "⚪"
+                    
+                    if match:
+                        params = int(match.group(1))
+                        # Formula: (Params * 4.5 bits / 8) + 1.5GB overhead
+                        est_gb = (params * 0.6) + 1.5
+                        vram_est = f"~{est_gb:.1f}GB"
+                        if est_gb <= vram_limit:
+                            fit_icon = "🟢" # Fits
+                        elif est_gb <= vram_limit * 1.2:
+                            fit_icon = "🟡" # Tight
+                        else:
+                            fit_icon = "🔴" # Too large
+                    
+                    print(f" {fit_icon} {m_id:<50} | {vram_est:>7} | ↓ {downloads}")
+                print("\nLegend: 🟢 Fits  🟡 Tight  🔴 Likely OOM  ⚪ Unknown")
+                print("Use './lms_cli.py config --vram <gb>' to set your GPU capacity.")
         except Exception as e:
             print(f"Hugging Face search failed: {e}")
 
@@ -314,6 +339,7 @@ def main():
     conf = s.add_parser("config", help="Configure CLI settings")
     conf.add_argument("--url", help="Set base URL")
     conf.add_argument("--timeout", type=int, help="Set timeout")
+    conf.add_argument("--vram", type=float, help="Set GPU VRAM in GB")
     conf.add_argument("--show", action="store_true", help="Show current config")
     
     stat = s.add_parser("status", help="Show status")
@@ -377,12 +403,13 @@ def main():
     
     args = p.parse_args()
     m = ConfigManager()
-    c = LMStudioClient(m.get("base_url"), m.get("timeout"))
+    c = LMStudioClient(m.get("base_url"), m.get("timeout"), m.get("vram_gb"))
     
     if args.cmd == "config":
         if args.url: m.save_config("base_url", args.url)
         if args.timeout: m.save_config("timeout", args.timeout)
-        if args.show or (not args.url and not args.timeout): print(json.dumps(m.config, indent=4))
+        if args.vram: m.save_config("vram_gb", args.vram)
+        if args.show or (not args.url and not args.timeout and not args.vram): print(json.dumps(m.config, indent=4))
     elif args.cmd == "status": c.status(args.watch)
     elif args.cmd in ["list", "models"]: c.list_models()
     elif args.cmd == "check": c.check()
