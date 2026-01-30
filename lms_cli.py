@@ -244,9 +244,21 @@ class LMStudioClient:
                     
                     m_id = m.get('modelId')
                     downloads = m.get('downloads', 0)
+                    tags = m.get('tags', [])
                     match = re.search(r'(\d+)b', m_id.lower())
                     vram_est = "???"
                     fit_icon = "⚪"
+                    
+                    # Tool support heuristic
+                    has_tools = False
+                    if any(t in tags for t in ["tool-use", "function-calling"]):
+                        has_tools = True
+                    else:
+                        m_id_lower = m_id.lower()
+                        if any(k in m_id_lower for k in ["instruct", "coder", "thinking", "reasoning"]):
+                            has_tools = True
+                    
+                    tool_icon = "🛠️" if has_tools else "  "
                     
                     if match:
                         params = int(match.group(1))
@@ -258,11 +270,11 @@ class LMStudioClient:
                         if est_gb <= vram_limit: fit_icon = "🟢"
                         else: fit_icon = "🟡"
                     
-                    print(f" {fit_icon} {m_id:<50} | {vram_est:>7} | ↓ {downloads}")
+                    print(f" {fit_icon} {tool_icon} {m_id:<50} | {vram_est:>7} | ↓ {downloads}")
                     count += 1
                 
                 print(f"\nShown {count} models that fit your hardware.")
-                print("Legend: 🟢 Fits  🟡 Tight  ⚪ Unknown size")
+                print("Legend: 🟢 Fits  🟡 Tight  ⚪ Unknown size  🛠️ Tool Support")
         except Exception as e: print(f"HF search failed: {e}")
 
     def chat(self, model_id: str, message: str, system: Optional[str] = None, 
