@@ -6,6 +6,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 import re
 from typing import Optional, Dict, Any, List, Iterator
 
@@ -227,7 +228,8 @@ class LMStudioClient:
 
         print(f"--- Searching Hugging Face for '{query}' (GGUF) ---")
         print(f" (Estimating fit for {vram_limit}GB VRAM)")
-        hf_url = f"https://huggingface.co/api/models?search={query}&filter=gguf&sort=downloads&direction=-1&limit=10"
+        encoded_query = urllib.parse.quote(query)
+        hf_url = f"https://huggingface.co/api/models?search={encoded_query}&filter=gguf&sort=downloads&direction=-1&limit=10"
         try:
             req = urllib.request.Request(hf_url)
             with urllib.request.urlopen(req, timeout=10) as response:
