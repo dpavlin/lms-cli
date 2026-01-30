@@ -263,15 +263,32 @@ class LMStudioClient:
         payload = {"model": model_id, "context_length": ctx}
         if gpu is not None:
             payload["gpu_layers"] = int(gpu) if gpu > 1 else -1
+        
         try:
-            resp = self._request("POST", "/api/v1/models/load", payload)
-            print(f"Loaded instance: {resp.get('instance_id')}")
+            # Use a much longer timeout for loading (10 minutes)
+            url = f"{self.base_url}/api/v1/models/load"
+            headers = {'Content-Type': 'application/json'}
+            req = urllib.request.Request(url, method="POST", headers=headers, data=json.dumps(payload).encode('utf-8'))
+            with urllib.request.urlopen(req, timeout=600) as response:
+                resp = json.loads(response.read().decode('utf-8'))
+                print(f"Loaded instance: {resp.get('instance_id', model_id)}")
         except Exception as e:
-            print(f"Load failed: {e}")
+            print(f"Primary load failed or timed out: {e}")
             print("Falling back to chat completion load...")
-            fb = {"model": model_id, "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 1}
-            self._request("POST", "/v1/chat/completions", fb)
-            print("Load triggered (fallback).")
+            fb_payload = {
+                "model": model_id, 
+                "messages": [{"role": "user", "content": "Hi"}], 
+                "max_tokens": 1,
+                "context_length": ctx # Some versions respect this in JIT
+            }
+            # Also try setting the header for the fallback
+            fb_headers = {'Content-Type': 'application/json', 'X-LM-Context-Length': str(ctx)}
+            fb_req = urllib.request.Request(f"{self.base_url}/v1/chat/completions", method="POST", headers=fb_headers, data=json.dumps(fb_payload).encode('utf-8'))
+            try:
+                with urllib.request.urlopen(fb_req, timeout=600) as response:
+                    print("Load triggered (fallback).")
+            except Exception as fe:
+                print(f"Fallback also failed: {fe}")
 
     def unload(self, identifier: str = None, all_models: bool = False):
         if all_models:
