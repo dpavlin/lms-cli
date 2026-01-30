@@ -149,6 +149,79 @@ class LMStudioClient:
         except Exception as e:
             print(f"Error listing models: {e}")
 
+    def switch(self):
+        vram_limit = self.vram_gb
+        try:
+            data = self._request("GET", "/api/v0/models")
+            models = data.get('data', [])
+            
+            print(f"--- Switch Model (VRAM Limit: {vram_limit}GB) ---")
+            print(f" #  {'ID':<55}    | {'Size':>5} | {'VRAM Est':>8} | {'GPU %':>6} | {'Quant':<8} | {'Capabilities'}")
+            print(f" --{'-'*55}----|-------|----------|--------|----------|--------------------")
+            
+            current_vram_usage = 0
+            
+            for idx, model in enumerate(models):
+                m_id = model.get('id')
+                quant = model.get('quantization', 'N/A')
+                is_loaded = model.get('state') == 'loaded'
+                caps = ", ".join(model.get('capabilities', [])) or "None"
+                
+                match = re.search(r'(\d+(?:\.\d+)?)[bB]', m_id)
+                size_str, vram_est, pct = "???", 0, 0
+                if match:
+                    p = float(match.group(1))
+                    size_str = f"{p:g}B"
+                    vram_est = (p * 0.6) + 1.5
+                    pct = (vram_est / vram_limit) * 100
+                
+                if is_loaded:
+                    current_vram_usage += vram_est
+                
+                gpu_str = f"{int(pct)}%" if pct > 0 else "???"
+                if is_loaded: gpu_str = f"*{gpu_str}"
+                
+                status_icon = "🟢" if is_loaded else "  "
+                vram_str = f"~{vram_est:.1f}GB" if vram_est > 0 else "???"
+                
+                # Apply bold if loaded
+                line = f"{idx+1:2} {m_id:<55} {status_icon} | {size_str:>5} | {vram_str:>8} | {gpu_str:>6} | {quant:<8} | {caps}"
+                if is_loaded:
+                    print(f"\033[1m{line}\033[0m")
+                else:
+                    print(line)
+
+            print(f"\nCurrent Estimated VRAM Usage: {current_vram_usage:.1f}GB / {vram_limit}GB")
+            
+            choice = input("\nSelect model number to load (or Enter to cancel): ").strip()
+            if not choice: return
+            
+            sel_idx = int(choice) - 1
+            if not (0 <= sel_idx < len(models)):
+                print("Invalid selection.")
+                return
+            
+            target_model = models[sel_idx]
+            t_id = target_model['id']
+            
+            # Estimate target vram
+            t_match = re.search(r'(\d+(?:\.\d+)?)[bB]', t_id)
+            t_vram = (float(t_match.group(1)) * 0.6) + 1.5 if t_match else 0
+            
+            # Check if it fits
+            if current_vram_usage + t_vram > vram_limit * 1.05: # 5% grace
+                print(f"\n⚠️  Warning: Loading '{t_id}' may exceed VRAM limit.")
+                confirm = input("Unload all currently loaded models first? (Y/n): ").strip().lower()
+                if confirm != 'n':
+                    self.unload(all_models=True)
+            
+            self.load(t_id)
+            
+        except (ValueError, KeyboardInterrupt, EOFError):
+            pass
+        except Exception as e:
+            print(f"Switch failed: {e}")
+
     def info(self, model_id: Optional[str] = None):
         try:
             data = self._request("GET", "/api/v0/models")
@@ -489,6 +562,74 @@ class LMStudioClient:
             print(f"Failed to generate OpenCode config: {e}", file=sys.stderr)
                 
 
+    def top(self):
+        try:
+            while True:
+                start_req = time.time()
+                try:
+                    # 1. Gather Data
+                    data = self._request("GET", "/api/v0/models")
+                    models = data.get('data', [])
+                    loaded = [m for m in models if m.get('state') == 'loaded']
+                    
+                    downloads = []
+                    try:
+                        downloads = self._request("GET", "/api/v1/models/download/status")
+                    except: pass
+                    
+                    latency = (time.time() - start_req) * 1000
+                    
+                    # 2. Render UI
+                    os.system('clear')
+                    print(f"LM STUDIO TOP | {self.base_url} | Latency: {latency:.0f}ms")
+                    print(f"VRAM Config: {self.vram_gb}GB | Status: Online")
+                    print("-" * 80)
+                    
+                    # Loaded Models Section
+                    print(f"\nLOADED MODELS ({len(loaded)}):")
+                    if loaded:
+                        print(f" {'ID':<50} | {'VRAM':>8} | {'GPU %':>6} | {'Ctx':>8}")
+                        for m in loaded:
+                            mid = m['id']
+                            ctx = m.get('loaded_context_length', '???')
+                            
+                            # VRAM Est logic
+                            match = re.search(r'(\d+(?:\.\d+)?)[bB]', mid)
+                            vram_str, gpu_str = "???", "???"
+                            if match:
+                                p = float(match.group(1))
+                                est = (p * 0.6) + 1.5
+                                vram_str = f"~{est:.1f}GB"
+                                gpu_str = f"{int((est/self.vram_gb)*100)}%"
+                            
+                            print(f" 🟢 {mid:<47} | {vram_str:>8} | {gpu_str:>6} | {ctx:>8}")
+                    else:
+                        print(" (No models loaded)")
+                        
+                    # Downloads Section
+                    if downloads:
+                        print(f"\nACTIVE DOWNLOADS ({len(downloads)}):")
+                        for d in downloads:
+                            jid = d.get('job_id', '???')
+                            status = d.get('status', '???')
+                            prog = 0
+                            if d.get('total_size_bytes'):
+                                prog = (d['downloaded_bytes'] / d['total_size_bytes']) * 100
+                            
+                            speed = d.get('bytes_per_second', 0) / 1024 / 1024
+                            print(f" {jid:<15} | [{'#'*int(prog/5):<20}] {prog:>3.0f}% | {speed:>6.1f} MB/s | {status}")
+                    
+                    print(f"\n(Press Ctrl+C to exit)")
+                    
+                except Exception as e:
+                    os.system('clear')
+                    print(f"LM STUDIO TOP | Status: OFFLINE")
+                    print(f"Error: {e}")
+                
+                time.sleep(2)
+        except KeyboardInterrupt:
+            pass
+
     def templates(self):
         t = {
             "Coder": "Expert software engineer. Concise code.",
@@ -522,6 +663,7 @@ def main():
     
     s.add_parser("list", help="List all models in your local library")
     s.add_parser("models", help="Alias for 'list'")
+    s.add_parser("switch", help="Interactively select a model to load, with VRAM management")
     s.add_parser("check", help="Quick connectivity check to the server")
     
     load = s.add_parser("load", help="Load a model with optional settings")
@@ -576,6 +718,7 @@ def main():
     op.add_argument("--think", help="Manual override for thinking model ID")
     op.add_argument("--context", type=int, help="Context size for generated config (overrides default)")
     
+    s.add_parser("top", help="Real-time top-like dashboard of LM Studio server")
     s.add_parser("templates", help="Show useful system prompt templates")
     
     rw = s.add_parser("raw", help="Send a raw HTTP request to the API")
@@ -595,6 +738,7 @@ def main():
         if args.show or (not args.url and not args.timeout and not args.vram and not args.context): print(json.dumps(m.config, indent=4))
     elif args.cmd == "status": c.status(args.watch)
     elif args.cmd in ["list", "models"]: c.list_models()
+    elif args.cmd == "switch": c.switch()
     elif args.cmd == "check": c.check()
     elif args.cmd == "info": c.info(args.model_id)
     elif args.cmd == "load": c.load(args.model_id, args.context, args.gpu)
@@ -609,6 +753,7 @@ def main():
     elif args.cmd == "complete": c.complete(args.model_id, args.prompt)
     elif args.cmd == "embeddings": c.embeddings(args.model_id, args.input)
     elif args.cmd == "opencode": c.opencode(args.coder, args.think, args.context)
+    elif args.cmd == "top": c.top()
     elif args.cmd == "templates": c.templates()
     elif args.cmd == "raw": c.raw(args.method, args.endpoint, args.data)
     else: p.print_help()
