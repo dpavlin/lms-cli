@@ -83,6 +83,16 @@ class LMStudioClient:
             print(f"✘ LM Studio is NOT reachable at {self.base_url}")
             return False
 
+    def get_active_model(self) -> Optional[str]:
+        try:
+            data = self._request("GET", "/api/v0/models")
+            for m in data.get('data', []):
+                if m.get('state') == 'loaded':
+                    return m['id']
+        except:
+            pass
+        return None
+
     def status(self, watch: bool = False):
         try:
             while True:
@@ -707,7 +717,7 @@ def main():
     s.add_parser("presets", help="List local LM Studio configuration presets")
     
     ch = s.add_parser("chat", help="Send a single chat message")
-    ch.add_argument("model_id", help="The ID of the model to use")
+    ch.add_argument("model_id", nargs='?', help="The ID of the model to use (optional if model loaded)")
     ch.add_argument("msg", help="The message to send")
     ch.add_argument("--system", help="Optional system prompt")
     ch.add_argument("--stream", action="store_true", help="Enable real-time token streaming")
@@ -716,18 +726,18 @@ def main():
     ch.add_argument("--top-p", type=float, default=1.0, help="Top P sampling (default: 1.0)")
 
     rep = s.add_parser("repl", help="Start an interactive streaming conversation")
-    rep.add_argument("model_id", help="The ID of the model to use")
+    rep.add_argument("model_id", nargs='?', help="The ID of the model to use (optional if model loaded)")
     rep.add_argument("--system", help="Optional system prompt")
     
     bn = s.add_parser("bench", help="Benchmark model performance (TTFT and TPS)")
-    bn.add_argument("model_id", help="The ID of the model to benchmark")
+    bn.add_argument("model_id", nargs='?', help="The ID of the model to benchmark (optional if model loaded)")
     
     cp = s.add_parser("complete", help="Perform classic text completion (non-chat)")
-    cp.add_argument("model_id", help="The ID of the model to use")
+    cp.add_argument("model_id", nargs='?', help="The ID of the model to use (optional if model loaded)")
     cp.add_argument("prompt", help="The text prompt to complete")
     
     em = s.add_parser("embeddings", help="Generate vector embeddings for a text string")
-    em.add_argument("model_id", help="The ID of the model to use")
+    em.add_argument("model_id", nargs='?', help="The ID of the model to use (optional if model loaded)")
     em.add_argument("input", help="The text to generate embeddings for")
     
     op = s.add_parser("opencode", help="Generate OpenCode json config")
@@ -747,6 +757,15 @@ def main():
     m = ConfigManager()
     c = LMStudioClient(m.get("base_url"), m.get("timeout"), m.get("vram_gb"), m.get("default_context"))
     
+    def resolve_model(m_id):
+        if m_id: return m_id
+        active = c.get_active_model()
+        if active:
+            print(f"Using active model: {active}", file=sys.stderr)
+            return active
+        print("Error: No model specified and no model is currently loaded.", file=sys.stderr)
+        sys.exit(1)
+
     if args.cmd == "config":
         if args.url: m.save_config("base_url", args.url)
         if args.timeout: m.save_config("timeout", args.timeout)
@@ -759,16 +778,24 @@ def main():
     elif args.cmd == "check": c.check()
     elif args.cmd == "info": c.info(args.model_id)
     elif args.cmd == "load": c.load(args.model_id, args.context, args.gpu)
-    elif args.cmd == "unload": c.unload(args.model_id, args.all)
+    elif args.cmd == "unload": 
+        target = args.model_id
+        if not target and not args.all:
+            target = c.get_active_model()
+            if not target:
+                print("Error: No model specified and no model is currently loaded.", file=sys.stderr)
+                sys.exit(1)
+            print(f"Using active model: {target}", file=sys.stderr)
+        c.unload(target, args.all)
     elif args.cmd == "search": c.search(args.query)
     elif args.cmd == "download": c.download(args.model_id)
     elif args.cmd == "download-status": c.download_status(args.job_id)
     elif args.cmd == "presets": c.presets()
-    elif args.cmd == "chat": c.chat(args.model_id, args.msg, args.system, args.stream, args.temp, args.max_tokens, args.top_p)
-    elif args.cmd == "repl": c.repl(args.model_id, args.system)
-    elif args.cmd == "bench": c.bench(args.model_id)
-    elif args.cmd == "complete": c.complete(args.model_id, args.prompt)
-    elif args.cmd == "embeddings": c.embeddings(args.model_id, args.input)
+    elif args.cmd == "chat": c.chat(resolve_model(args.model_id), args.msg, args.system, args.stream, args.temp, args.max_tokens, args.top_p)
+    elif args.cmd == "repl": c.repl(resolve_model(args.model_id), args.system)
+    elif args.cmd == "bench": c.bench(resolve_model(args.model_id))
+    elif args.cmd == "complete": c.complete(resolve_model(args.model_id), args.prompt)
+    elif args.cmd == "embeddings": c.embeddings(resolve_model(args.model_id), args.input)
     elif args.cmd == "opencode": c.opencode(args.coder, args.think, args.context)
     elif args.cmd == "top": c.top()
     elif args.cmd == "templates": c.templates()
