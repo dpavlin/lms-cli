@@ -331,7 +331,8 @@ class LMStudioClient:
                 except:
                     print("Unload failed. Ensure you use the correct ID.")
 
-    def download(self, model_id: str):
+    def download(self, model_id: str, auto_switch: bool = True):
+        original_input = model_id
         if not model_id.startswith("http") and "/" in model_id:
             print(f"Converting '{model_id}' to Hugging Face URL...")
             model_id = f"https://huggingface.co/{model_id}"
@@ -347,6 +348,7 @@ class LMStudioClient:
             print(f"Download started (Job ID: {job_id})")
             
             # Monitoring loop
+            success = False
             try:
                 while True:
                     status = self.download_status(job_id, internal=True)
@@ -365,6 +367,7 @@ class LMStudioClient:
                     
                     if state == 'completed':
                         print("\n✅ Download finished successfully.")
+                        success = True
                         break
                     if state == 'failed':
                         print(f"\n❌ Download failed: {status.get('error', 'Unknown error')}")
@@ -373,6 +376,45 @@ class LMStudioClient:
                     time.sleep(1)
             except KeyboardInterrupt:
                 print(f"\nStopped monitoring. Download continues in background (Job: {job_id})")
+            
+            if success and auto_switch:
+                print(f"\nSwitching to {original_input}...")
+                # Give LM Studio a moment to index the new file
+                time.sleep(2)
+                
+                resolved_id = None
+                try:
+                    data = self._request("GET", "/api/v0/models")
+                    all_m = data.get('data', [])
+                    
+                    # Try matching strategies
+                    # 1. Exact match (case insensitive)
+                    for m in all_m:
+                        if m['id'].lower() == original_input.lower():
+                            resolved_id = m['id']
+                            break
+                    
+                    # 2. Contains match
+                    if not resolved_id:
+                        for m in all_m:
+                            if original_input.lower() in m['id'].lower() or m['id'].lower() in original_input.lower():
+                                resolved_id = m['id']
+                                break
+                    
+                    # 3. Basename match
+                    if not resolved_id:
+                        base = original_input.split("/")[-1].lower()
+                        for m in all_m:
+                            if base in m['id'].lower():
+                                resolved_id = m['id']
+                                break
+                except: pass
+                
+                final_id = resolved_id or original_input
+                self.unload(all_models=True)
+                self.load(final_id)
+                print(f"\nVerifying {final_id} is responding...")
+                self.chat(final_id, "ping", max_tokens=10, stream=True)
                 
         except Exception as e:
             print(f"Download failed: {e}")
@@ -770,6 +812,7 @@ def main():
     
     dl = s.add_parser("download", help="Download a model from Hugging Face")
     dl.add_argument("model_id", help="Repo identifier (e.g., 'username/repo') or full URL")
+    dl.add_argument("--no-switch", action="store_true", help="Do not automatically switch to the model after download")
     
     ds = s.add_parser("download-status", help="Check progress of background downloads")
     ds.add_argument("job_id", nargs='?', help="The job ID to track (optional)")
@@ -848,7 +891,7 @@ def main():
             print(f"Using active model: {target}", file=sys.stderr)
         c.unload(target, args.all)
     elif args.cmd == "search": c.search(args.query)
-    elif args.cmd == "download": c.download(args.model_id)
+    elif args.cmd == "download": c.download(args.model_id, not args.no_switch)
     elif args.cmd == "download-status": c.download_status(args.job_id)
     elif args.cmd == "presets": c.presets()
     elif args.cmd == "chat": c.chat(resolve_model(args.model_id), args.msg, args.system, args.stream, args.temp, args.max_tokens, args.top_p)
