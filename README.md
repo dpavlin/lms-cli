@@ -1,98 +1,68 @@
-# LM Studio CLI Utility
+# LM Studio CLI (vibe coded with gemini)
 
-A high-performance Python CLI for [LM Studio](https://lmstudio.ai/). Designed for developers who need fast model management, real-time monitoring, and hardware-aware model discovery.
+Just a quick and dirty Python script to manage [LM Studio](https://lmstudio.ai/) from your terminal without having to click around the GUI all the time. 
 
-## ✨ Key Smart Features
+It was built entirely with vibes and Gemini (Google's AI), so it's probably got some quirks, but it works surprisingly well for moving models around and checking what's going on.
 
-- **Interactive Switcher**: Use `./lms_cli.py switch` to browse your models, see their VRAM footprint, and load them interactively with automatic memory management.
-- **Real-time Dashboard**: Use `./lms_cli.py top` for a `top`-like view of your LM Studio server, including loaded models and background download progress bars.
-- **Context-Aware Commands**: Most commands (like `chat`, `repl`, `bench`) **automatically use the currently active model** if you don't specify one.
-- **Hardware Estimation**: The `search` and `list` commands estimate VRAM usage and show a 🟢/🟡/🔴 indicator based on your GPU's capacity.
-- **Intelligent Discovery**: Search the Hugging Face Hub for GGUF models directly from your terminal with tool-support (🛠️) detection.
+## ✨ The Cool Stuff
 
-## 🛠️ Installation
+- **`switch`**: Interactively browse your models, see if they'll explode your VRAM, and load them. It unloads everything else first so you don't OOM.
+- **`top`**: A dashboard that actually shows you what's loaded and how your background downloads are doing.
+- **Lazy Commands**: If you have a model loaded, just type `./lms_cli.py chat "hi"` and it'll figure out which model to use.
+- **Smart Search**: Search Hugging Face for GGUF models and see a 🟢/🟡/🔴 indicator based on your GPU size.
+- **OpenCode helper**: Generates `opencode.json` with the right settings so you can use thinking models for planning and coder models for building.
 
-1. Ensure Python 3 is installed.
-2. Make the script executable:
-   ```bash
-   chmod +x lms_cli.py
-   ```
+## 🛠️ How to use it
 
-## 🚀 Quick Start
+1. Make it executable: `chmod +x lms_cli.py`
+2. Tell it about your GPU: `./lms_cli.py config --vram 12.0 --context 32768`
+3. Just run it: `./lms_cli.py switch`
 
-### 1. Configuration
-Set your hardware limits to enable "Smart Fit" estimation.
+## 🚀 Quick Examples
+
 ```bash
-# Tell the CLI your GPU has 12GB VRAM
-./lms_cli.py config --vram 12.0 --context 32768
-```
+# Benchmark your speed
+./lms_cli.py bench
 
-### 2. Model Management
-```bash
-# Interactive model selection and loading
-./lms_cli.py switch
+# Chat with streaming
+./lms_cli.py chat "How do I fix my life?" --stream
 
-# Real-time dashboard
-./lms_cli.py top
+# Search for a new model to try
+./lms_cli.py search "deepseek coder"
 
-# Clear all models from GPU immediately
+# Panic button (clears VRAM)
 ./lms_cli.py unload --all
 ```
 
-### 3. Interaction (Active Model)
-If a model is loaded, you don't need to provide its ID.
-```bash
-# Start a streaming, stateful conversation
-./lms_cli.py repl
+## 📋 Every Command
 
-# Benchmark your GPU's generation speed (TTFT/TPS)
-./lms_cli.py bench
-
-# Quick chat with a specific persona
-./lms_cli.py chat "Explain quantum gravity" --system "You are a friendly cat." --stream
-```
-
-### 4. Discovery & Download
-```bash
-# Find tool-capable models that fit your GPU
-./lms_cli.py search "qwen3 coder"
-
-# Download using repo ID (auto-converts to HF URL)
-./lms_cli.py download bartowski/Llama-3.2-1B-Instruct-GGUF
-```
-
-### 5. Integrations
-```bash
-# Generate OpenCode config with auto-detected Planner/Coder models
-./lms_cli.py opencode --context 32768 > opencode.json
-```
-
-## 📋 Command Reference
-
-| Command | Description |
+| Command | What it does |
 | :--- | :--- |
-| `config` | Manage CLI settings like base URL, VRAM, and default context. |
-| `status` | Show server summary and currently loaded models. |
-| `list` | Detailed table of local models (alias: `models`). |
-| `switch` | Interactive list and load interface with VRAM management. |
-| `top` | Real-time server dashboard and background download tracker. |
-| `check` | Quick connectivity check to the LM Studio server. |
-| `info` | Get detailed technical metadata for a specific model. |
-| `load` | Load a model into memory with optional settings. |
-| `unload` | Clear specific models or all models from VRAM. |
-| `search` | Discover models on Hugging Face with "Smart Fit" indicators. |
-| `download` | Download models from Hugging Face (auto-URL conversion). |
-| `download-status` | Track progress of active background downloads. |
-| `presets` | List local LM Studio configuration presets. |
-| `chat` | Send a single message (supports streaming and system prompts). |
-| `repl` | Start an interactive, stateful, streaming conversation session. |
-| `bench` | Measure model performance (TTFT and Tokens Per Second). |
-| `complete` | Perform classic non-chat text completion. |
-| `embeddings` | Generate vector embeddings for text input. |
-| `opencode` | Generate highly compatible `opencode.json` config files. |
-| `templates` | Show a collection of optimized system prompt templates. |
-| `raw` | Send arbitrary HTTP requests to the LM Studio API. |
+| `config` | Tell the script about your URL, VRAM, and preferred context size. |
+| `status` | Who's loaded right now? |
+| `list` | Show everything you've downloaded so far (alias: `models`). |
+| `switch` | The "best" way to pick and load a model. |
+| `top` | Live dashboard for vibes and downloads. |
+| `check` | Is the server even on? |
+| `info` | Nerd stats about a model (arch, quant, etc.). |
+| `load` | Force load a model with specific settings. |
+| `unload` | Kick a model (or all of them) out of VRAM. |
+| `search` | Find new models on Hugging Face that actually fit your card. |
+| `download` | Grab a model from HF (you can just paste the `user/repo`). |
+| `download-status` | How much longer for that 20GB file? |
+| `presets` | Show those LM Studio config presets. |
+| `chat` | Quick one-off message. |
+| `repl` | Full-on conversation mode. |
+| `bench` | Speed test (TTFT/TPS) with GPU detection. |
+| `complete` | Classic text completion. |
+| `embeddings` | Turn text into numbers. |
+| `opencode` | Fix those context issues for OpenCode. |
+| `templates` | System prompt cheat sheet. |
+| `raw` | Send whatever JSON you want to the API. |
 
 ## Requirements
-- Python 3.x
-- LM Studio (Local Server enabled on port 1234)
+- Python 3
+- LM Studio running with the Local Server turned on (usually port 1234)
+
+---
+*Built with ❤️ and a lot of back-and-forth with Gemini.*
