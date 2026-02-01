@@ -333,8 +333,9 @@ class LMStudioClient:
 
     def tool_test(self, model_id: str, log_file: Optional[str] = None):
         log_entries = []
-        def log(msg, end="\n", flush=True):
-            print(msg, end=end, flush=flush)
+        def log(msg, end="\n", flush=True, terminal=True):
+            if terminal:
+                print(msg, end=end, flush=flush)
             log_entries.append(msg + end)
 
         log(f"--- Comprehensive Tool Test: {model_id} ---")
@@ -366,8 +367,10 @@ class LMStudioClient:
             log(f"  Testing {tool_name:<20} ... ", end="")
             step_start = time.time()
             payload = {"model": model_id, "messages": [{"role": "user", "content": prompt}], "tools": tools, "tool_choice": "auto"}
+            log(f"\n[REQUEST PAYLOAD]:\n{json.dumps(payload, indent=2)}", terminal=False)
             try:
                 resp = self._request("POST", "/v1/chat/completions", payload)
+                log(f"\n[RESPONSE JSON]:\n{json.dumps(resp, indent=2)}", terminal=False)
                 tc = resp.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
                 duration = time.time() - step_start
                 if any(call['function']['name'] == tool_name for call in tc):
@@ -390,8 +393,10 @@ class LMStudioClient:
             log(f"  Testing Multi-Tool ({label:<6}) ... ", end="")
             step_start = time.time()
             payload = {"model": model_id, "messages": [{"role": "user", "content": prompt}], "tools": tools, "tool_choice": "auto"}
+            log(f"\n[REQUEST PAYLOAD]:\n{json.dumps(payload, indent=2)}", terminal=False)
             try:
                 resp = self._request("POST", "/v1/chat/completions", payload)
+                log(f"\n[RESPONSE JSON]:\n{json.dumps(resp, indent=2)}", terminal=False)
                 tc = resp.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
                 duration = time.time() - step_start
                 if len(tc) >= 3:
