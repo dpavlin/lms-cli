@@ -331,72 +331,105 @@ class LMStudioClient:
                 except:
                     print("Unload failed. Ensure you use the correct ID.")
 
-    def tool_test(self, model_id: str):
-        print(f"Testing tool calling capabilities for {model_id}...")
-        payload = {
-            "model": model_id,
-            "messages": [
-                {"role": "user", "content": "Create 'main.py' with print('start'), and update 'auth.py' setting is_active to True."}
-            ],
-            "tools": [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "write_file",
-                        "description": "Creates or overwrites a file",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "path": {"type": "string"},
-                                "content": {"type": "string"}
-                            },
-                            "required": ["path", "content"]
-                        }
-                    }
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "patch_file",
-                        "description": "Applies a patch to a file",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "path": {"type": "string"},
-                                "search": {"type": "string"},
-                                "replace": {"type": "string"}
-                            },
-                            "required": ["path", "search", "replace"]
-                        }
-                    }
-                }
-            ],
-            "tool_choice": "auto"
-        }
+    def tool_test(self, model_id: str, log_file: Optional[str] = None):
+        log_entries = []
+        def log(msg, end="\n", flush=True):
+            print(msg, end=end, flush=flush)
+            log_entries.append(msg + end)
+
+        log(f"--- Comprehensive Tool Test: {model_id} ---")
+        log(f"Started at: {time.ctime()}\n")
         
-        try:
-            resp = self._request("POST", "/v1/chat/completions", payload)
-            choice = resp.get('choices', [{}])[0]
-            msg = choice.get('message', {})
-            tool_calls = msg.get('tool_calls', [])
-            
-            if len(tool_calls) >= 2:
-                print(f"✅ SUCCESS: Model correctly generated {len(tool_calls)} tool calls.")
-                for tc in tool_calls:
-                    f = tc['function']
-                    print(f"   -> {f['name']}({f['arguments']})")
-            elif len(tool_calls) == 1:
-                print(f"❌ FAILURE: Model only generated 1 tool call (expected 2).")
-                f = tool_calls[0]['function']
-                print(f"   Generated: {f['name']}({f['arguments']})")
-                print(f"   Note: This model might not support parallel tool calling.")
-            else:
-                print("❌ FAILURE: Model responded with text instead of tool calls.")
-                if msg.get('content'):
-                    print(f"   Response: {msg.get('content')}")
-                
-        except Exception as e:
-            print(f"Tool test failed: {e}")
+        tools = [
+            {"type": "function", "function": {"name": "list_files", "description": "Lists files", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+            {"type": "function", "function": {"name": "read_file", "description": "Reads a file", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+            {"type": "function", "function": {"name": "write_file", "description": "Creates a file", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}}},
+            {"type": "function", "function": {"name": "patch_file", "description": "Updates a file", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "search": {"type": "string"}, "replace": {"type": "string"}}, "required": ["path", "search", "replace"]}}},
+            {"type": "function", "function": {"name": "search_file_content", "description": "Greps content", "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}, "required": ["pattern", "path"]}}},
+            {"type": "function", "function": {"name": "run_shell_command", "description": "Execbash", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}}
+        ]
+
+        individual_tests = [
+            ("list_files", "List files in the current directory."),
+            ("read_file", "Read the content of 'lms_cli.py'."),
+            ("write_file", "Create a new file 'test.log' with 'log entry'."),
+            ("patch_file", "In 'config.py', change 'DEBUG = False' to 'DEBUG = True'."),
+            ("search_file_content", "Search for the string 'import' inside 'lms_cli.py'."),
+            ("run_shell_command", "Run the command 'uname -a' in the shell.")
+        ]
+
+        results = {}
+        total_start = time.time()
+
+        log("STAGE 1: Individual Tool Tests")
+        for tool_name, prompt in individual_tests:
+            log(f"  Testing {tool_name:<20} ... ", end="")
+            step_start = time.time()
+            payload = {"model": model_id, "messages": [{"role": "user", "content": prompt}], "tools": tools, "tool_choice": "auto"}
+            try:
+                resp = self._request("POST", "/v1/chat/completions", payload)
+                tc = resp.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
+                duration = time.time() - step_start
+                if any(call['function']['name'] == tool_name for call in tc):
+                    log(f"✅ ({duration:.2f}s)")
+                    results[tool_name] = True
+                else:
+                    log(f"❌ ({duration:.2f}s)")
+                    results[tool_name] = False
+            except Exception as e:
+                log(f"⚠️ Error: {e}")
+                results[tool_name] = False
+
+        log("\nSTAGE 2: Multi-Tool (Parallel) Tests")
+        multi_prompts = [
+            ("Direct", "Do all at once: list files in '.', search for 'TODO' in 'lms_cli.py', and run 'date'."),
+            ("Strict", "SYSTEM: STRICTOR TEST. You MUST output 3 tool calls now: 1. list_files('.'), 2. run_shell_command('whoami'), 3. write_file('notes.txt', 'hello').")
+        ]
+
+        for label, prompt in multi_prompts:
+            log(f"  Testing Multi-Tool ({label:<6}) ... ", end="")
+            step_start = time.time()
+            payload = {"model": model_id, "messages": [{"role": "user", "content": prompt}], "tools": tools, "tool_choice": "auto"}
+            try:
+                resp = self._request("POST", "/v1/chat/completions", payload)
+                tc = resp.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
+                duration = time.time() - step_start
+                if len(tc) >= 3:
+                    log(f"✅ ({len(tc)} tools, {duration:.2f}s)")
+                    results[f"multi_{label}"] = True
+                elif len(tc) > 0:
+                    log(f"🟡 ({len(tc)} tools, {duration:.2f}s)")
+                    results[f"multi_{label}"] = False
+                else:
+                    log(f"❌ ({duration:.2f}s)")
+                    results[f"multi_{label}"] = False
+            except Exception as e:
+                log(f"⚠️ Error: {e}")
+                results[f"multi_{label}"] = False
+
+        total_duration = time.time() - total_start
+        log(f"\n--- Summary for {model_id} ---")
+        log(f"Total time: {total_duration:.2f}s")
+        passed = sum(1 for v in results.values() if v)
+        total = len(results)
+        log(f"Score: {passed}/{total}")
+        
+        if passed == total:
+            log("Verdict: 🚀 EXCELLENT. Fully capable agent model.")
+        elif results.get("multi_Direct") or results.get("multi_Strict"):
+            log("Verdict: 🟢 GOOD. Supports parallel tool calls.")
+        elif any(results.values()):
+            log("Verdict: 🟡 LIMITED. Single-tool only. OpenCode will be slow.")
+        else:
+            log("Verdict: 🔴 INCAPABLE. Does not support tools via API.")
+
+        if log_file:
+            try:
+                with open(log_file, 'w') as f:
+                    f.writelines(log_entries)
+                print(f"\nDetailed log saved to: {log_file}")
+            except Exception as e:
+                print(f"\nFailed to save log: {e}")
 
     def download(self, model_id: str, auto_switch: bool = True):
         original_input = model_id
@@ -874,7 +907,9 @@ def main():
     inf = s.add_parser("info", help="Get detailed model metadata (arch, quantization, etc.)")
     inf.add_argument("model_id", nargs='?', help="The ID of the model to inspect (optional, shows all loaded if omitted)")
     
-    s.add_parser("tool-test", help="Verify if a model supports tool calling").add_argument("model_id", nargs='?')
+    tt = s.add_parser("tool-test", help="Verify if a model supports tool calling")
+    tt.add_argument("model_id", nargs='?', help="The ID of the model to use (optional if model loaded)")
+    tt.add_argument("--log", help="Path to save a detailed test log")
     
     src = s.add_parser("search", help="Search local library and discover models on Hugging Face")
     src.add_argument("query", help="Search term (e.g., 'llama', 'coder')")
@@ -948,7 +983,7 @@ def main():
     elif args.cmd in ["list", "models"]: c.list_models()
     elif args.cmd == "switch": c.switch(args.query)
     elif args.cmd == "check": c.check()
-    elif args.cmd == "tool-test": c.tool_test(resolve_model(args.model_id))
+    elif args.cmd == "tool-test": c.tool_test(resolve_model(args.model_id), args.log)
     elif args.cmd == "info": c.info(args.model_id)
     elif args.cmd == "load": c.load(args.model_id, args.context, args.gpu)
     elif args.cmd == "unload": 
