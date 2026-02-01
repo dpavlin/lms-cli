@@ -331,6 +331,73 @@ class LMStudioClient:
                 except:
                     print("Unload failed. Ensure you use the correct ID.")
 
+    def tool_test(self, model_id: str):
+        print(f"Testing tool calling capabilities for {model_id}...")
+        payload = {
+            "model": model_id,
+            "messages": [
+                {"role": "user", "content": "Create 'main.py' with print('start'), and update 'auth.py' setting is_active to True."}
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "write_file",
+                        "description": "Creates or overwrites a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "content": {"type": "string"}
+                            },
+                            "required": ["path", "content"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "patch_file",
+                        "description": "Applies a patch to a file",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "search": {"type": "string"},
+                                "replace": {"type": "string"}
+                            },
+                            "required": ["path", "search", "replace"]
+                        }
+                    }
+                }
+            ],
+            "tool_choice": "auto"
+        }
+        
+        try:
+            resp = self._request("POST", "/v1/chat/completions", payload)
+            choice = resp.get('choices', [{}])[0]
+            msg = choice.get('message', {})
+            tool_calls = msg.get('tool_calls', [])
+            
+            if len(tool_calls) >= 2:
+                print(f"✅ SUCCESS: Model correctly generated {len(tool_calls)} tool calls.")
+                for tc in tool_calls:
+                    f = tc['function']
+                    print(f"   -> {f['name']}({f['arguments']})")
+            elif len(tool_calls) == 1:
+                print(f"❌ FAILURE: Model only generated 1 tool call (expected 2).")
+                f = tool_calls[0]['function']
+                print(f"   Generated: {f['name']}({f['arguments']})")
+                print(f"   Note: This model might not support parallel tool calling.")
+            else:
+                print("❌ FAILURE: Model responded with text instead of tool calls.")
+                if msg.get('content'):
+                    print(f"   Response: {msg.get('content')}")
+                
+        except Exception as e:
+            print(f"Tool test failed: {e}")
+
     def download(self, model_id: str, auto_switch: bool = True):
         original_input = model_id
         if not model_id.startswith("http") and "/" in model_id:
@@ -807,6 +874,8 @@ def main():
     inf = s.add_parser("info", help="Get detailed model metadata (arch, quantization, etc.)")
     inf.add_argument("model_id", nargs='?', help="The ID of the model to inspect (optional, shows all loaded if omitted)")
     
+    s.add_parser("tool-test", help="Verify if a model supports tool calling").add_argument("model_id", nargs='?')
+    
     src = s.add_parser("search", help="Search local library and discover models on Hugging Face")
     src.add_argument("query", help="Search term (e.g., 'llama', 'coder')")
     
@@ -879,6 +948,7 @@ def main():
     elif args.cmd in ["list", "models"]: c.list_models()
     elif args.cmd == "switch": c.switch(args.query)
     elif args.cmd == "check": c.check()
+    elif args.cmd == "tool-test": c.tool_test(resolve_model(args.model_id))
     elif args.cmd == "info": c.info(args.model_id)
     elif args.cmd == "load": c.load(args.model_id, args.context, args.gpu)
     elif args.cmd == "unload": 
