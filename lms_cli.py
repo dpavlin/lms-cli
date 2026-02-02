@@ -288,22 +288,25 @@ class LMStudioClient:
                 resp = json.loads(response.read().decode('utf-8'))
                 print(f"Loaded instance: {resp.get('instance_id', model_id)}")
         except Exception as e:
-            print(f"Primary load failed or timed out: {e}")
+            print(f"Primary load failed: {e}")
             print("Falling back to chat completion load...")
+            # Use every known key to force context size in JIT
             fb_payload = {
                 "model": model_id, 
                 "messages": [{"role": "user", "content": "Hi"}], 
                 "max_tokens": 1,
-                "context_length": ctx # Some versions respect this in JIT
+                "context_length": ctx,
+                "num_ctx": ctx,
+                "context_window": ctx,
+                "contextLength": ctx
             }
-            # Also try setting the header for the fallback
             fb_headers = {'Content-Type': 'application/json', 'X-LM-Context-Length': str(ctx)}
             fb_req = urllib.request.Request(f"{self.base_url}/v1/chat/completions", method="POST", headers=fb_headers, data=json.dumps(fb_payload).encode('utf-8'))
             try:
                 with urllib.request.urlopen(fb_req, timeout=600) as response:
                     print("Load triggered (fallback).")
             except Exception as fe:
-                print(f"Fallback also failed: {fe}")
+                print(f"Fallback failed: {fe}")
 
     def unload(self, identifier: str = None, all_models: bool = False):
         if all_models:
@@ -484,8 +487,8 @@ class LMStudioClient:
             
             if success and auto_switch:
                 print(f"\nSwitching to {original_input}...")
-                # Give LM Studio a moment to index the new file
-                time.sleep(2)
+                # Give LM Studio more time to index the new file
+                time.sleep(5)
                 
                 resolved_id = None
                 try:
