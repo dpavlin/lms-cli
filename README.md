@@ -6,29 +6,29 @@ It was built entirely with vibes and Gemini (Google's AI), so it's probably got 
 
 ## ✨ The Cool Stuff
 
-- **`switch`**: Interactively browse your models, see if they'll explode your VRAM, and load them. It unloads everything else first so you don't OOM.
-- **`top`**: A dashboard that actually shows you what's loaded and how your background downloads are doing.
+- **`switch`**: Interactively browse your models, filter by name, and load them. It automatically unloads everything else first to save VRAM and sends a "ping" to verify the model is actually awake.
+- **`top`**: A real-time dashboard that shows you what's loaded (with VRAM/Context stats) and how your background downloads are doing.
+- **`tool-test`**: A rigorous stress-test to see if a model actually supports **Parallel Tool Calling** (essential for agents like OpenCode).
 - **Lazy Commands**: If you have a model loaded, just type `./lms_cli.py chat "hi"` and it'll figure out which model to use.
-- **Smart Search**: Search Hugging Face for GGUF models and see a 🟢/🟡/🔴 indicator based on your GPU size.
-- **OpenCode helper**: Generates `opencode.json` with the right settings so you can use thinking models for planning and coder models for building.
+- **Smart Search**: Search Hugging Face for GGUF models and see a 🟢/🟡/🔴 indicator based on your GPU size and 🛠️ icons for tool support.
 
 ## 🛠️ How to use it
 
 1. Make it executable: `chmod +x lms_cli.py`
-2. Tell it about your GPU: `./lms_cli.py config --vram 12.0 --context 32768`
+2. Tell it about your GPU: `./lms_cli.py config --vram 16.0 --context 32768`
 3. Just run it: `./lms_cli.py switch`
 
 ## 🚀 Quick Examples
 
 ```bash
-# Benchmark your speed
+# Benchmark your speed & detect GPU acceleration
 ./lms_cli.py bench
 
-# Chat with streaming
-./lms_cli.py chat "How do I fix my life?" --stream
+# Test if your current model can handle complex agent tasks
+./lms_cli.py tool-test
 
-# Search for a new model to try
-./lms_cli.py search "deepseek coder"
+# Search for a specific model class
+./lms_cli.py search "qwen3 coder"
 
 # Panic button (clears VRAM)
 ./lms_cli.py unload --all
@@ -38,25 +38,25 @@ It was built entirely with vibes and Gemini (Google's AI), so it's probably got 
 
 | Command | What it does |
 | :--- | :--- |
-| `config` | Tell the script about your URL, VRAM, and preferred context size. |
-| `status` | Who's loaded right now? |
+| `config` | Set your URL, VRAM capacity, and default context size (32k by default). |
+| `status` | The big dashboard. Who's loaded? What are their specs (Arch, Quant, Context)? |
 | `list` | Show everything you've downloaded so far (alias: `models`). |
-| `switch` | The "best" way to pick and load a model. |
-| `top` | Live dashboard for vibes and downloads. |
+| `switch` | The "best" way to pick and load a model. Supports optional filtering. |
+| `top` | Live auto-refreshing dashboard for vibes and downloads. |
 | `check` | Is the server even on? |
-| `info` | Nerd stats about a model (arch, quant, etc.). |
-| `load` | Force load a model with specific settings. |
+| `tool-test` | Can this model handle file edits and shell commands? |
+| `load` | Force load a model with specific context/gpu settings. |
 | `unload` | Kick a model (or all of them) out of VRAM. |
 | `search` | Find new models on Hugging Face that actually fit your card. |
-| `download` | Grab a model from HF (you can just paste the `user/repo`). |
+| `download` | Grab a model from HF. Auto-switches to the model when done! |
 | `download-status` | How much longer for that 20GB file? |
 | `presets` | Show those LM Studio config presets. |
-| `chat` | Quick one-off message. |
-| `repl` | Full-on conversation mode. |
-| `bench` | Speed test (TTFT/TPS) with GPU detection. |
+| `chat` | Quick one-off message (auto-uses active model). |
+| `repl` | Full-on streaming conversation mode. |
+| `bench` | Speed test (TTFT/TPS) with heuristic GPU detection. |
 | `complete` | Classic text completion. |
 | `embeddings` | Turn text into numbers. |
-| `opencode` | Fix those context issues for OpenCode. |
+| `opencode` | Generate `opencode.json` with 32k context and tool flags. |
 | `templates` | System prompt cheat sheet. |
 | `raw` | Send whatever JSON you want to the API. |
 
