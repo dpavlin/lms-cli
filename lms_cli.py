@@ -106,10 +106,26 @@ class LMStudioClient:
                     print(f"Status:   Online")
                     print(f"Models:   {len(models)} available")
                     if loaded:
-                        print(f"\nCurrently Loaded Models:")
+                        print(f"\n--- Currently Loaded Models ({len(loaded)}) ---")
                         for m in loaded:
-                            ctx = m.get('loaded_context_length', 'unknown')
-                            print(f" - {m.get('id')} ({m.get('type', 'llm')}, context: {ctx})")
+                            m_id = m.get('id')
+                            
+                            # Size/VRAM estimation
+                            match = re.search(r'(\d+(?:\.\d+)?)[bB]', m_id)
+                            size_str = "???"
+                            vram_est = "???"
+                            if match:
+                                p = float(match.group(1))
+                                size_str = f"{p:g}B"
+                                est = (p * 0.6) + 1.5
+                                vram_est = f"~{est:.1f}GB"
+
+                            print(f"\nModel:        {m_id}")
+                            print(f"  Architecture: {m.get('arch', 'N/A')}")
+                            print(f"  Size:         {size_str} (Est. VRAM: {vram_est})")
+                            print(f"  Quantization: {m.get('quantization', 'N/A')}")
+                            print(f"  Context:      {m.get('loaded_context_length', 'N/A')} / {m.get('max_context_length', 'N/A')}")
+                            print(f"  Capabilities: {', '.join(m.get('capabilities', [])) or 'None'}")
                     else:
                         print("\nNo models currently loaded.")
                 except:
